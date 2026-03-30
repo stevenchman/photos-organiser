@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Photos Organiser</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- Header -->
+  <header>
+    <div class="logo">📷</div>
+    <h1>Photos Organiser</h1>
+  </header>
+
+  <main>
+
+    <!-- ── SETTINGS VIEW ──────────────────────────────────────────────── -->
+    <div id="view-settings" class="view">
+      <h2>Set up your scan</h2>
+      <p class="subtitle">Choose your source folder, destination, and naming options.</p>
+
+      <div id="ffprobe-warning" class="alert alert-warn" style="display:none">
+        ⚠ ffprobe not found on PATH. Video metadata (MP4, INSV) will fall back to file modified date.
+        Install FFmpeg and ensure it's on your PATH for accurate video dates.
+      </div>
+
+      <div class="field">
+        <label>Source folder <em style="color:var(--muted)">(where your unorganised files are)</em></label>
+        <div class="path-row">
+          <input type="text" id="source-path" placeholder="e.g. D:\Camera Imports" autocomplete="off">
+          <button class="btn-secondary" id="browse-source">Browse…</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Destination folder <em style="color:var(--muted)">(where the organised library will live)</em></label>
+        <div class="path-row">
+          <input type="text" id="dest-path" placeholder="e.g. E:\Photos Library" autocomplete="off">
+          <button class="btn-secondary" id="browse-dest">Browse…</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Operation</label>
+        <div class="toggle-group">
+          <button id="op-copy" class="active">Copy files</button>
+          <button id="op-move">Move files</button>
+        </div>
+        <p style="font-size:0.8rem;color:var(--muted);margin-top:6px">
+          Copy keeps originals in place. Move transfers files to the new structure.
+        </p>
+      </div>
+
+      <div class="field">
+        <label>Folder naming mode</label>
+        <div class="toggle-group">
+          <button id="mode-exif" class="active">EXIF only</button>
+          <button id="mode-ai">AI vision</button>
+        </div>
+        <p style="font-size:0.8rem;color:var(--muted);margin-top:6px">
+          EXIF only: dates from photo metadata, you type descriptions.
+          AI vision: Claude analyses a sample photo and suggests a descriptive name.
+        </p>
+      </div>
+
+      <div id="ai-key-section" style="display:none">
+        <div id="api-key-field" class="field">
+          <label>Anthropic API key</label>
+          <div class="path-row">
+            <input type="password" id="api-key-input" placeholder="sk-ant-…" autocomplete="off">
+            <button class="btn-secondary" id="validate-key-btn">Validate</button>
+          </div>
+          <div style="margin-top:6px;">
+            <span id="key-status" class="badge" style="display:none"></span>
+          </div>
+        </div>
+        <span id="api-key-saved-note" style="display:none;font-size:0.82rem;color:var(--success)">
+          ✓ API key loaded from environment.
+        </span>
+      </div>
+
+      <div id="settings-error" class="alert alert-danger" style="display:none"></div>
+
+      <button class="btn-primary" id="start-scan-btn" style="margin-top:8px;padding:11px 28px;">
+        Scan folder →
+      </button>
+    </div><!-- /settings -->
+
+
+    <!-- ── SCANNING VIEW ──────────────────────────────────────────────── -->
+    <div id="view-scanning" class="view">
+      <div class="spinner-wrap">
+        <div class="spinner"></div>
+        <p id="scan-status-text" class="scan-status-text">Scanning…</p>
+        <p style="font-size:0.8rem;color:var(--muted)">Large folders may take a moment.</p>
+      </div>
+    </div><!-- /scanning -->
+
+
+    <!-- ── PREVIEW VIEW ───────────────────────────────────────────────── -->
+    <div id="view-preview" class="view">
+      <div class="section-header">
+        <div>
+          <h2>Review organisation plan</h2>
+          <p id="preview-group-count" class="subtitle"></p>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn-secondary" id="back-to-settings">← Back</button>
+          <button class="btn-primary" id="suggest-all-btn" style="display:none">✦ Get AI Names</button>
+        </div>
+      </div>
+
+      <div id="preview-alert" class="alert" style="display:none"></div>
+
+      <div id="groups-container"></div>
+
+      <!-- Undated files -->
+      <div id="undated-section" class="undated-section" style="display:none">
+        <h3>⚠ Undated files</h3>
+        <p style="font-size:0.85rem;color:var(--muted);margin-bottom:14px">
+          These files have no date metadata. Assign a date to include them, or leave blank to skip.
+        </p>
+        <div id="undated-files-container"></div>
+      </div>
+
+      <!-- Sticky footer -->
+      <div style="height:80px"></div>
+    </div><!-- /preview -->
+
+
+    <!-- ── EXECUTING VIEW ─────────────────────────────────────────────── -->
+    <div id="view-executing" class="view">
+      <h2>Organising files…</h2>
+      <p class="subtitle">Please don't close this window until complete.</p>
+
+      <div class="progress-wrap" style="margin-top:32px">
+        <div class="progress-track">
+          <div id="exec-progress-fill" class="progress-fill" style="width:0%"></div>
+        </div>
+        <div class="progress-label">
+          <span id="exec-progress-label">Starting…</span>
+        </div>
+      </div>
+      <p id="exec-current-file" style="font-size:0.82rem;color:var(--muted);margin-top:8px;
+         white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%"></p>
+    </div><!-- /executing -->
+
+
+    <!-- ── DONE VIEW ──────────────────────────────────────────────────── -->
+    <div id="view-done" class="view">
+      <div class="done-icon">✅</div>
+      <h2 style="text-align:center;margin-bottom:8px">Done!</h2>
+      <p id="done-summary-text" style="text-align:center;margin-bottom:28px"></p>
+
+      <table class="summary-table">
+        <thead>
+          <tr><th>Status</th><th>File</th><th>Destination</th><th>Error</th></tr>
+        </thead>
+        <tbody id="done-results-tbody"></tbody>
+      </table>
+
+      <div style="margin-top:28px;text-align:center">
+        <button class="btn-primary" id="restart-btn">Organise more files →</button>
+      </div>
+    </div><!-- /done -->
+
+  </main><!-- /main -->
+
+  <!-- Sticky confirm footer (visible during preview) -->
+  <div id="preview-footer" class="sticky-footer" style="display:none">
+    <span id="footer-info" class="footer-info"></span>
+    <div class="footer-actions">
+      <button class="btn-success" id="confirm-btn" style="padding:10px 28px;font-size:0.95rem">
+        Confirm &amp; organise →
+      </button>
+    </div>
+  </div>
+
+</div><!-- /app-shell -->
+
+<!-- Lightbox -->
+<div id="lightbox-overlay" class="lightbox-overlay">
+  <button id="lightbox-close" class="lightbox-close">✕</button>
+  <div id="lightbox-spinner" class="lightbox-spinner">
+    <div class="spinner"></div>
+  </div>
+  <div class="lightbox-content">
+    <img id="lightbox-img" class="lightbox-img" alt="">
+    <video id="lightbox-video" class="lightbox-video" controls playsinline></video>
+  </div>
+  <div id="lightbox-caption" class="lightbox-caption"></div>
+</div>
+
+<!-- Folder picker modal -->
+<div id="picker-overlay" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <span id="picker-title">Select Folder</span>
+      <button class="btn-icon" id="picker-close">✕</button>
+    </div>
+    <div id="picker-path-bar" class="modal-path-bar"></div>
+    <div id="picker-list" class="modal-list"></div>
+    <div class="modal-footer">
+      <span id="picker-selected" class="modal-selected-path"></span>
+      <button class="btn-primary" id="picker-select">Select this folder</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/lightbox.js"></script>
+<script src="/js/settings.js"></script>
+<script src="/js/preview.js"></script>
+<script src="/js/app.js"></script>
+
+<script>
+  // Show/hide sticky footer based on active view
+  const observer = new MutationObserver(() => {
+    const previewActive = document.getElementById("view-preview").classList.contains("active");
+    document.getElementById("preview-footer").style.display = previewActive ? "flex" : "none";
+  });
+  observer.observe(document.getElementById("view-preview"), { attributes: true });
+</script>
+
+</body>
+</html>
