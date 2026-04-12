@@ -64,6 +64,25 @@ const API = {
   executeStatusUrl(execId) {
     return `/api/execute/status/${execId}`;
   },
+
+  // ── Watcher ──────────────────────────────────────────────────────────────
+
+  async watcherStatus() {
+    return _get("/api/watcher/status");
+  },
+
+  async watcherStart(watchPath, destPath, operation, dateFormat) {
+    return _post("/api/watcher/start", {
+      watch_path: watchPath,
+      dest_path: destPath,
+      operation,
+      date_format: dateFormat,
+    });
+  },
+
+  async watcherStop() {
+    return _post("/api/watcher/stop", {});
+  },
 };
 
 async function _get(url) {

@@ -6,3 +6,9 @@ flask_session/
 *.egg-info/
 .DS_Store
 Thumbs.db
+node_modules/
+dist/
+build/
+release/
+ffmpeg/
+.claude/

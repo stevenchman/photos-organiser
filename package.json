@@ -1,0 +1,16 @@
+{
+  "name": "flex",
+  "version": "1.0.0",
+  "description": "Flex - Photo Organiser",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:backend": "venv/Scripts/pyinstaller.exe flex.spec --noconfirm --clean",
+    "build:electron": "npx @electron/packager . Flex --platform=win32 --arch=x64 --out=release --overwrite --icon=assets/icon.ico --ignore=\"^/(venv|dist|build|release|ffmpeg|__pycache__|flask_session|scripts|core|api|ui|\\.env|\\.git)\" --extra-resource=dist/flex-backend --extra-resource=ffmpeg",
+    "build": "npm run build:backend && npm run build:electron"
+  },
+  "devDependencies": {
+    "@electron/packager": "^19.1.0",
+    "electron": "22.3.27"
+  }
+}

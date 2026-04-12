@@ -24,8 +24,9 @@ from core.ai_vision import AIVisionError, suggest_group_name, validate_api_key
 from core.grouper import DayGroup, group_by_date
 from core.metadata import extract_thumbnail, ffprobe_available
 from core.mover import MoveResult, execute_plan, preflight_check
-from core.namer import build_folder_path
+from core.namer import build_folder_path, DATE_FORMATS, DEFAULT_DATE_FORMAT
 from core.scanner import FileRecord, scan
+from core.watcher import start_watcher, stop_watcher, watcher_status
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 
@@ -98,8 +99,11 @@ def get_settings():
         "dest_path": session.get("dest_path", ""),
         "operation": session.get("operation", "copy"),
         "mode": session.get("mode", "exif"),
+        "date_format": session.get("date_format", DEFAULT_DATE_FORMAT),
+        "scan_depth": session.get("scan_depth", 0),
         "has_api_key": bool(session.get("api_key") or os.environ.get("ANTHROPIC_API_KEY")),
         "ffprobe_available": ffprobe_available(),
+        "date_formats": list(DATE_FORMATS.keys()),
     })
 
 
@@ -110,6 +114,10 @@ def post_settings():
     session["dest_path"] = data.get("dest_path", "")
     session["operation"] = data.get("operation", "copy")
     session["mode"] = data.get("mode", "exif")
+    if data.get("date_format") in DATE_FORMATS:
+        session["date_format"] = data["date_format"]
+    if "scan_depth" in data:
+        session["scan_depth"] = int(data.get("scan_depth", 0))
     if data.get("api_key"):
         session["api_key"] = data["api_key"]
     return jsonify({"ok": True})
@@ -189,7 +197,9 @@ def start_scan():
             def progress(n):
                 _scans[scan_id]["files_found"] = n
 
-            dated, undated = scan(source, dest, on_progress=progress)
+            depth = session.get("scan_depth", 0)
+            max_depth = int(depth) if depth and int(depth) > 0 else None
+            dated, undated = scan(source, dest, on_progress=progress, max_depth=max_depth)
             groups = group_by_date(dated)
             _scans[scan_id].update({
                 "status": "complete",
@@ -405,12 +415,14 @@ def post_confirm():
             s["groups"].append(new_group)
             group_by_id[new_group.group_id] = new_group
 
+    date_format = session.get("date_format", DEFAULT_DATE_FORMAT)
+
     # Build file_moves list for pre-flight check
     file_moves: list[tuple[Path, Path]] = []
     for g in s["groups"]:
         if g.skip:
             continue
-        dest_dir = build_folder_path(dest_root, g.date, g.description)
+        dest_dir = build_folder_path(dest_root, g.date, g.description, date_format)
         for f in g.files:
             file_moves.append((f.source_path, dest_dir))
 
@@ -491,3 +503,39 @@ def get_execute_status(exec_id: str):
 
     return Response(generate(), mimetype="text/event-stream",
                     headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+# ── Watcher ───────────────────────────────────────────────────────────────────
+
+@bp.get("/watcher/status")
+def get_watcher_status():
+    return jsonify(watcher_status())
+
+
+@bp.post("/watcher/start")
+def post_watcher_start():
+    data = request.get_json(force=True)
+    watch_path = data.get("watch_path", "").strip()
+    dest_path = data.get("dest_path", "").strip()
+    operation = data.get("operation", "copy")
+    date_format = data.get("date_format", session.get("date_format", DEFAULT_DATE_FORMAT))
+
+    if not watch_path or not dest_path:
+        return jsonify({"error": "watch_path and dest_path are required."}), 400
+    if not Path(watch_path).is_dir():
+        return jsonify({"error": f"Watch folder not found: {watch_path}"}), 400
+    if not Path(dest_path).is_dir():
+        # Attempt to create destination
+        try:
+            Path(dest_path).mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            return jsonify({"error": f"Cannot create destination: {e}"}), 400
+
+    status = start_watcher(watch_path, dest_path, operation, date_format)
+    return jsonify(status)
+
+
+@bp.post("/watcher/stop")
+def post_watcher_stop():
+    status = stop_watcher()
+    return jsonify(status)

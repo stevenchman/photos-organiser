@@ -1,5 +1,6 @@
 """
-Entry point — starts the Flask server and opens the browser.
+Entry point — starts the Flask server.
+When launched by Electron (ELECTRON=1 env var), browser auto-open is skipped.
 """
 
 import os
@@ -50,7 +51,11 @@ def _open_browser():
 
 
 if __name__ == "__main__":
-    print(f"\nPhoto Organiser running at http://{config.HOST}:{config.PORT}")
-    print("Press Ctrl+C to stop.\n")
-    threading.Timer(1.0, _open_browser).start()
+    _is_electron = os.environ.get("ELECTRON") == "1"
+
+    if not _is_electron:
+        print(f"\nPhoto Organiser running at http://{config.HOST}:{config.PORT}")
+        print("Press Ctrl+C to stop.\n")
+        threading.Timer(1.0, _open_browser).start()
+
     app.run(host=config.HOST, port=config.PORT, debug=False, use_reloader=False)

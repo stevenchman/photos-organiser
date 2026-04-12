@@ -3,16 +3,37 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Photos Organiser</title>
+  <title>Flex — Photos Organiser</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&family=Sora:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&family=Nunito:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600;700&family=Raleway:wght@300;400;500;600;700&family=Oswald:wght@300;400;500;600;700&family=Bebas+Neue&family=Playfair+Display:wght@400;500;600;700&family=Lora:wght@400;500;600;700&family=Merriweather:wght@300;400;700&family=EB+Garamond:wght@400;500;600;700&family=Cormorant+Garamond:wght@300;400;500;600;700&family=DM+Serif+Display&family=Libre+Baskerville:wght@400;700&family=Spectral:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Themes / fonts must load before styles to avoid flash -->
+  <script src="/js/themes.js"></script>
+  <script src="/js/fonts.js"></script>
   <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body>
+
+<!-- Electron titlebar (shown only when ELECTRON=1) -->
+<div id="titlebar">
+  <span class="titlebar-title">Flex</span>
+  <div class="titlebar-controls">
+    <button class="titlebar-btn" id="titlebar-minimize" title="Minimise">─</button>
+    <button class="titlebar-btn" id="titlebar-maximize" title="Maximise">□</button>
+    <button class="titlebar-btn" id="titlebar-close" title="Close">✕</button>
+  </div>
+</div>
+
 <div class="app-shell">
 
   <!-- Header -->
   <header>
-    <div class="logo">📷</div>
-    <h1>Photos Organiser</h1>
+    <div class="header-left">
+      <div class="header-logo">📷</div>
+      <h1>Photos Organiser</h1>
+    </div>
+    <div class="header-actions">
+      <button class="btn-icon" id="appearance-btn" title="Appearance">🎨</button>
+    </div>
   </header>
 
   <main>
@@ -24,22 +45,24 @@
 
       <div id="ffprobe-warning" class="alert alert-warn" style="display:none">
         ⚠ ffprobe not found on PATH. Video metadata (MP4, INSV) will fall back to file modified date.
-        Install FFmpeg and ensure it's on your PATH for accurate video dates.
+        Install FFmpeg via scoop (<code>scoop install ffmpeg</code>) for accurate video dates.
       </div>
 
       <div class="field">
-        <label>Source folder <em style="color:var(--muted)">(where your unorganised files are)</em></label>
-        <div class="path-row">
+        <label>Source folder <em style="color:var(--text-muted)">(where your unorganised files are)</em></label>
+        <div class="path-row" id="source-path-row">
           <input type="text" id="source-path" placeholder="e.g. D:\Camera Imports" autocomplete="off">
           <button class="btn-secondary" id="browse-source">Browse…</button>
+          <div class="path-history-dropdown" id="source-history"></div>
         </div>
       </div>
 
       <div class="field">
-        <label>Destination folder <em style="color:var(--muted)">(where the organised library will live)</em></label>
-        <div class="path-row">
+        <label>Destination folder <em style="color:var(--text-muted)">(where the organised library will live)</em></label>
+        <div class="path-row" id="dest-path-row">
           <input type="text" id="dest-path" placeholder="e.g. E:\Photos Library" autocomplete="off">
           <button class="btn-secondary" id="browse-dest">Browse…</button>
+          <div class="path-history-dropdown" id="dest-history"></div>
         </div>
       </div>
 
@@ -49,7 +72,7 @@
           <button id="op-copy" class="active">Copy files</button>
           <button id="op-move">Move files</button>
         </div>
-        <p style="font-size:0.8rem;color:var(--muted);margin-top:6px">
+        <p style="font-size:0.78rem;color:var(--text-muted);margin-top:6px">
           Copy keeps originals in place. Move transfers files to the new structure.
         </p>
       </div>
@@ -60,10 +83,29 @@
           <button id="mode-exif" class="active">EXIF only</button>
           <button id="mode-ai">AI vision</button>
         </div>
-        <p style="font-size:0.8rem;color:var(--muted);margin-top:6px">
+        <p style="font-size:0.78rem;color:var(--text-muted);margin-top:6px">
           EXIF only: dates from photo metadata, you type descriptions.
           AI vision: Claude analyses a sample photo and suggests a descriptive name.
         </p>
+      </div>
+
+      <div class="field">
+        <label>Date format</label>
+        <div class="toggle-group" id="date-format-group">
+          <button data-fmt="yymmdd"    class="active">YYMMDD</button>
+          <button data-fmt="yyyymmdd">YYYYMMDD</button>
+          <button data-fmt="yy-mm-dd">YY-MM-DD</button>
+          <button data-fmt="yyyy-mm-dd">YYYY-MM-DD</button>
+        </div>
+        <p style="font-size:0.78rem;color:var(--text-muted);margin-top:6px" id="date-format-preview"></p>
+      </div>
+
+      <div class="field">
+        <label>Scan depth <em style="color:var(--text-muted)">(0 = unlimited)</em></label>
+        <div style="display:flex;align-items:center;gap:10px">
+          <input type="number" id="scan-depth" min="0" max="10" value="0" style="width:80px">
+          <span style="font-size:0.8rem;color:var(--text-muted)">Subfolders deep to scan (0 = all)</span>
+        </div>
       </div>
 
       <div id="ai-key-section" style="display:none">
@@ -77,7 +119,7 @@
             <span id="key-status" class="badge" style="display:none"></span>
           </div>
         </div>
-        <span id="api-key-saved-note" style="display:none;font-size:0.82rem;color:var(--success)">
+        <span id="api-key-saved-note" style="display:none;font-size:0.8rem;color:var(--success)">
           ✓ API key loaded from environment.
         </span>
       </div>
@@ -87,6 +129,52 @@
       <button class="btn-primary" id="start-scan-btn" style="margin-top:8px;padding:11px 28px;">
         Scan folder →
       </button>
+
+      <!-- ── WATCHER SECTION ─────────────────────────────────────────── -->
+      <div class="watcher-section">
+        <h3>Auto-watcher</h3>
+        <p class="subtitle">Monitor a folder for new files and organise them automatically.</p>
+
+        <div id="watcher-status-bar" class="watcher-status-bar">
+          <div class="watcher-status-dot" id="watcher-dot"></div>
+          <span id="watcher-status-text">Not running</span>
+          <span id="watcher-files-count" style="margin-left:auto;color:var(--text-dim)"></span>
+        </div>
+
+        <div class="field">
+          <label>Watch folder</label>
+          <div class="path-row" id="watch-path-row">
+            <input type="text" id="watch-path" placeholder="e.g. D:\Camera Import Drop" autocomplete="off">
+            <button class="btn-secondary" id="browse-watch">Browse…</button>
+            <div class="path-history-dropdown" id="watch-history"></div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Watcher destination</label>
+          <div class="path-row" id="watch-dest-path-row">
+            <input type="text" id="watch-dest-path" placeholder="e.g. E:\Photos Library" autocomplete="off">
+            <button class="btn-secondary" id="browse-watch-dest">Browse…</button>
+            <div class="path-history-dropdown" id="watch-dest-history"></div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Watcher operation</label>
+          <div class="toggle-group">
+            <button id="watch-op-copy" class="active">Copy</button>
+            <button id="watch-op-move">Move</button>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn-primary" id="watcher-start-btn">▶ Start watcher</button>
+          <button class="btn-secondary" id="watcher-stop-btn" style="display:none">■ Stop watcher</button>
+          <button class="btn-ghost btn-sm" id="watcher-log-toggle" style="display:none">Show log</button>
+        </div>
+
+        <div id="watcher-log" class="watcher-log"></div>
+      </div><!-- /watcher -->
     </div><!-- /settings -->
 
 
@@ -95,7 +183,7 @@
       <div class="spinner-wrap">
         <div class="spinner"></div>
         <p id="scan-status-text" class="scan-status-text">Scanning…</p>
-        <p style="font-size:0.8rem;color:var(--muted)">Large folders may take a moment.</p>
+        <p style="font-size:0.78rem;color:var(--text-muted)">Large folders may take a moment.</p>
       </div>
     </div><!-- /scanning -->
 
@@ -107,26 +195,31 @@
           <h2>Review organisation plan</h2>
           <p id="preview-group-count" class="subtitle"></p>
         </div>
-        <div style="display:flex;gap:8px;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn-secondary btn-sm" id="combine-mode-btn">Combine groups</button>
           <button class="btn-secondary" id="back-to-settings">← Back</button>
           <button class="btn-primary" id="suggest-all-btn" style="display:none">✦ Get AI Names</button>
         </div>
       </div>
 
-      <div id="preview-alert" class="alert" style="display:none"></div>
+      <div id="combine-toolbar">
+        <span class="combine-count" id="combine-count-label">0 groups selected</span>
+        <button class="btn-primary btn-sm" id="combine-do-btn">Combine selected →</button>
+        <button class="btn-ghost btn-sm" id="combine-cancel-btn">Cancel</button>
+      </div>
 
+      <div id="preview-alert" class="alert" style="display:none"></div>
       <div id="groups-container"></div>
 
       <!-- Undated files -->
       <div id="undated-section" class="undated-section" style="display:none">
         <h3>⚠ Undated files</h3>
-        <p style="font-size:0.85rem;color:var(--muted);margin-bottom:14px">
+        <p style="font-size:0.83rem;color:var(--text-muted);margin-bottom:14px">
           These files have no date metadata. Assign a date to include them, or leave blank to skip.
         </p>
         <div id="undated-files-container"></div>
       </div>
 
-      <!-- Sticky footer -->
       <div style="height:80px"></div>
     </div><!-- /preview -->
 
@@ -135,7 +228,6 @@
     <div id="view-executing" class="view">
       <h2>Organising files…</h2>
       <p class="subtitle">Please don't close this window until complete.</p>
-
       <div class="progress-wrap" style="margin-top:32px">
         <div class="progress-track">
           <div id="exec-progress-fill" class="progress-fill" style="width:0%"></div>
@@ -144,7 +236,7 @@
           <span id="exec-progress-label">Starting…</span>
         </div>
       </div>
-      <p id="exec-current-file" style="font-size:0.82rem;color:var(--muted);margin-top:8px;
+      <p id="exec-current-file" style="font-size:0.8rem;color:var(--text-muted);margin-top:8px;
          white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%"></p>
     </div><!-- /executing -->
 
@@ -154,14 +246,12 @@
       <div class="done-icon">✅</div>
       <h2 style="text-align:center;margin-bottom:8px">Done!</h2>
       <p id="done-summary-text" style="text-align:center;margin-bottom:28px"></p>
-
       <table class="summary-table">
         <thead>
           <tr><th>Status</th><th>File</th><th>Destination</th><th>Error</th></tr>
         </thead>
         <tbody id="done-results-tbody"></tbody>
       </table>
-
       <div style="margin-top:28px;text-align:center">
         <button class="btn-primary" id="restart-btn">Organise more files →</button>
       </div>
@@ -173,7 +263,7 @@
   <div id="preview-footer" class="sticky-footer" style="display:none">
     <span id="footer-info" class="footer-info"></span>
     <div class="footer-actions">
-      <button class="btn-success" id="confirm-btn" style="padding:10px 28px;font-size:0.95rem">
+      <button class="btn-success" id="confirm-btn" style="padding:10px 28px;font-size:0.93rem">
         Confirm &amp; organise →
       </button>
     </div>
@@ -181,9 +271,17 @@
 
 </div><!-- /app-shell -->
 
-<!-- Lightbox -->
+
+<!-- ── Lightbox ──────────────────────────────────────────────────────────── -->
 <div id="lightbox-overlay" class="lightbox-overlay">
-  <button id="lightbox-close" class="lightbox-close">✕</button>
+  <div class="lightbox-topbar">
+    <div id="lightbox-caption" class="lightbox-caption"></div>
+    <div class="lightbox-controls">
+      <button id="lightbox-rotate-ccw" class="lightbox-btn" title="Rotate left">↺</button>
+      <button id="lightbox-rotate-cw"  class="lightbox-btn" title="Rotate right">↻</button>
+      <button id="lightbox-close"      class="lightbox-btn" title="Close">✕</button>
+    </div>
+  </div>
   <div id="lightbox-spinner" class="lightbox-spinner">
     <div class="spinner"></div>
   </div>
@@ -191,10 +289,11 @@
     <img id="lightbox-img" class="lightbox-img" alt="">
     <video id="lightbox-video" class="lightbox-video" controls playsinline></video>
   </div>
-  <div id="lightbox-caption" class="lightbox-caption"></div>
+  <div id="lightbox-filmstrip" class="lightbox-filmstrip"></div>
 </div>
 
-<!-- Folder picker modal -->
+
+<!-- ── Folder picker modal ───────────────────────────────────────────────── -->
 <div id="picker-overlay" class="modal-overlay">
   <div class="modal">
     <div class="modal-header">
@@ -210,7 +309,39 @@
   </div>
 </div>
 
+
+<!-- ── Appearance overlay ─────────────────────────────────────────────────── -->
+<div id="appearance-overlay">
+  <div class="appearance-panel">
+    <div class="appearance-header">
+      <h3>Appearance</h3>
+      <button class="btn-icon" id="appearance-close">✕</button>
+    </div>
+    <div class="appearance-body">
+      <div class="appearance-section">
+        <div class="appearance-section-label">Theme</div>
+        <div class="settings-theme-grid" id="theme-grid"></div>
+      </div>
+      <div class="appearance-section">
+        <div class="appearance-section-label">Font</div>
+        <div class="settings-font-grid" id="font-grid"></div>
+      </div>
+      <div class="appearance-section">
+        <div class="appearance-section-label">Scale</div>
+        <div class="scale-options">
+          <button class="scale-option" data-scale="13">S</button>
+          <button class="scale-option" data-scale="15">M</button>
+          <button class="scale-option" data-scale="17">L</button>
+          <button class="scale-option" data-scale="19">XL</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
 <script src="/js/api.js"></script>
+<script src="/js/appearance.js"></script>
 <script src="/js/lightbox.js"></script>
 <script src="/js/settings.js"></script>
 <script src="/js/preview.js"></script>
@@ -218,11 +349,11 @@
 
 <script>
   // Show/hide sticky footer based on active view
-  const observer = new MutationObserver(() => {
+  const _footerObserver = new MutationObserver(() => {
     const previewActive = document.getElementById("view-preview").classList.contains("active");
     document.getElementById("preview-footer").style.display = previewActive ? "flex" : "none";
   });
-  observer.observe(document.getElementById("view-preview"), { attributes: true });
+  _footerObserver.observe(document.getElementById("view-preview"), { attributes: true });
 </script>
 
 </body>
