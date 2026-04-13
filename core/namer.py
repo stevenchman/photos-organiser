@@ -32,21 +32,27 @@ def build_folder_path(
     d: date,
     description: str,
     date_format: str = DEFAULT_DATE_FORMAT,
+    end_date: date | None = None,
 ) -> Path:
     """
     Return the full target folder path.
+
+    For combined groups spanning multiple days, pass end_date to get a range:
+        260402-260410 Snowdon trip
 
     Example:
         dest_root = Path("E:/Library")
         d = date(2026, 2, 14)
         description = "Snowdon hike"
-        date_format = "yymmdd"
 
     Returns:
         Path("E:/Library/-2026/260214 Snowdon hike")
     """
     year_folder = f"-{d.year}"
     day_folder = build_bare_name(d, date_format)
+
+    if end_date and end_date != d:
+        day_folder = f"{day_folder}-{build_bare_name(end_date, date_format)}"
 
     if description.strip():
         day_folder = f"{day_folder} {description.strip()}"

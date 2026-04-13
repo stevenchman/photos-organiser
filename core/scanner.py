@@ -12,8 +12,11 @@ from datetime import date
 from pathlib import Path
 from typing import Callable
 
-from config import SUPPORTED_EXTENSIONS
+from config import SUPPORTED_EXTENSIONS, VIDEO_EXTENSIONS
 from core.metadata import extract_date
+from core.blur import compute_blur_score
+
+_IMAGE_TYPES = {"jpeg", "raw_raf", "dng"}
 
 
 @dataclass
@@ -25,6 +28,7 @@ class FileRecord:
     date_source: str          # "exif" | "video_metadata" | "file_mtime"
     file_type: str            # e.g. "jpeg", "raw_raf", "mp4" …
     thumbnail_token: str      # SHA1 hex of source_path, used in thumbnail URL
+    blur_score: float | None = None  # Laplacian variance; None = video or unscored
 
 
 def _collect_paths(source: Path, dest: Path | None, max_depth: int | None) -> list[tuple[Path, str]]:
@@ -59,6 +63,7 @@ def _collect_paths(source: Path, dest: Path | None, max_depth: int | None) -> li
 def _build_record(path: Path, file_type: str) -> FileRecord:
     date_taken, date_source = extract_date(path)
     token = hashlib.sha1(str(path).encode()).hexdigest()
+    blur_score = compute_blur_score(path, file_type) if file_type in _IMAGE_TYPES else None
     return FileRecord(
         source_path=path,
         filename=path.name,
@@ -67,6 +72,7 @@ def _build_record(path: Path, file_type: str) -> FileRecord:
         date_source=date_source,
         file_type=file_type,
         thumbnail_token=token,
+        blur_score=blur_score,
     )
 
 

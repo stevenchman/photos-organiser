@@ -2,6 +2,7 @@ venv/
 __pycache__/
 *.pyc
 .env
+.secret_key
 flask_session/
 *.egg-info/
 .DS_Store

@@ -124,10 +124,11 @@ const App = (() => {
   // ── Confirm ────────────────────────────────────────────────────────────────
 
   async function _onConfirm() {
-    const groups  = Preview.collectGroups();
-    const undated = Preview.collectUndatedAssignments();
+    const groups     = Preview.collectGroups();
+    const undated    = Preview.collectUndatedAssignments();
+    const blurSkips  = Preview.collectBlurSkips();
     try {
-      const res = await API.confirm(state.scanId, state.operation, groups, undated);
+      const res = await API.confirm(state.scanId, state.operation, groups, undated, blurSkips);
       if (res.conflicts && res.conflicts.length > 0) {
         const ok = confirm(
           `${res.conflicts.length} file(s) already exist in the destination and will be renamed with a numeric suffix. Continue?`

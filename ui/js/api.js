@@ -48,12 +48,13 @@ const API = {
     return _post("/api/suggest-names", { scan_id: scanId, group_ids: groupIds || null });
   },
 
-  async confirm(scanId, operation, groups, undatedAssignments) {
+  async confirm(scanId, operation, groups, undatedAssignments, blurSkipTokens) {
     return _post("/api/confirm", {
       scan_id: scanId,
       operation,
       groups,
       undated_assignments: undatedAssignments || [],
+      blur_skip_tokens: blurSkipTokens || [],
     });
   },
 
@@ -71,12 +72,13 @@ const API = {
     return _get("/api/watcher/status");
   },
 
-  async watcherStart(watchPath, destPath, operation, dateFormat) {
+  async watcherStart(watchPath, destPath, operation, dateFormat, recursive = false) {
     return _post("/api/watcher/start", {
       watch_path: watchPath,
       dest_path: destPath,
       operation,
       date_format: dateFormat,
+      recursive,
     });
   },
 

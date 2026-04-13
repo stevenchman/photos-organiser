@@ -14,6 +14,7 @@ const Lightbox = (() => {
   let _currentScanId = null;
   let _currentToken = null;
   let _filmstripFiles = [];
+  const _preloadCache = new Set(); // tokens already kicked off for preload
 
   function _init() {
     _overlay   = document.getElementById("lightbox-overlay");
@@ -66,16 +67,35 @@ const Lightbox = (() => {
     }
   }
 
+  function _preloadImage(scanId, token) {
+    if (_preloadCache.has(token) || VIDEO_TYPES.has(token)) return;
+    _preloadCache.add(token);
+    const img = new Image();
+    img.src = API.previewUrl(scanId, token);
+  }
+
+  function _preloadNeighbors(scanId, currentToken) {
+    const idx = _filmstripFiles.findIndex(f => f.token === currentToken);
+    if (idx === -1) return;
+    // Preload next 2 and prev 1
+    [-1, 1, 2].forEach(offset => {
+      const f = _filmstripFiles[idx + offset];
+      if (f && !VIDEO_TYPES.has(f.file_type)) _preloadImage(scanId, f.token);
+    });
+  }
+
   function _openImage(scanId, token) {
     _img.onload = () => {
       _spinner.style.display = "none";
       _img.style.display = "block";
       _applyRotation();
+      _preloadNeighbors(scanId, token);
     };
     _img.onerror = () => {
       _spinner.style.display = "none";
       _caption.textContent += " (preview unavailable)";
     };
+    _preloadCache.add(token); // mark current as in-flight
     _img.src = API.previewUrl(scanId, token);
   }
 
@@ -160,6 +180,7 @@ const Lightbox = (() => {
     _video.src = "";
     _img.src = "";
     _filmstripFiles = [];
+    _preloadCache.clear();
   }
 
   return { open, close };

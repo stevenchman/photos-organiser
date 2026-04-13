@@ -3,6 +3,20 @@ const { spawn } = require('child_process');
 const path = require('path');
 const http = require('http');
 
+// ── Single-instance lock ───────────────────────────────────────────────────
+// Prevents a second instance from launching and corrupting localStorage/GPU cache
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+}
+
 const PORT = 5173;
 const FLASK_URL = `http://127.0.0.1:${PORT}`;
 const IS_PACKAGED = app.isPackaged;
@@ -24,9 +38,17 @@ function startFlask() {
     cwd = path.join(__dirname, '..');
   }
 
+  const ffmpegDir = IS_PACKAGED
+    ? path.join(process.resourcesPath, 'ffmpeg')
+    : null;
+
   flaskProcess = spawn(exe, args, {
     cwd,
-    env: { ...process.env, ELECTRON: '1' },
+    env: {
+      ...process.env,
+      ELECTRON: '1',
+      ...(ffmpegDir ? { FFMPEG_DIR: ffmpegDir } : {}),
+    },
     windowsHide: true,
   });
 

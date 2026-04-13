@@ -30,13 +30,15 @@ class _Watcher:
         dest_path: Path,
         operation: str,
         date_format: str,
-        interval: int = 5,
+        interval: int = 3,
+        recursive: bool = False,
     ):
         self.watch_path = watch_path
         self.dest_path = dest_path
         self.operation = operation
         self.date_format = date_format
         self.interval = interval
+        self.recursive = recursive
 
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
@@ -52,10 +54,13 @@ class _Watcher:
         if self.running:
             return
         self._stop_event.clear()
-        # Snapshot existing files so we don't process pre-existing ones
-        self._seen = self._snapshot_keys()
+        # Snapshot existing files so we don't reprocess pre-existing ones on restart
+        existing = self._snapshot_keys()
+        self._seen = existing
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
+        sub = " (including subfolders)" if self.recursive else ""
+        self._add_log("ok", f"Started — watching{sub}. {len(existing)} existing file(s) skipped. Drop new files to organise them.")
         log.info("Watcher started: %s → %s", self.watch_path, self.dest_path)
 
     def stop(self):
@@ -72,13 +77,15 @@ class _Watcher:
             "dest_path": str(self.dest_path),
             "operation": self.operation,
             "date_format": self.date_format,
+            "recursive": self.recursive,
             "files_processed": self._files_processed,
             "log": self._log[-50:],  # last 50 entries
         }
 
     def _snapshot_keys(self) -> set[str]:
         keys = set()
-        for path in self.watch_path.glob("*"):
+        pattern = "**/*" if self.recursive else "*"
+        for path in self.watch_path.glob(pattern):
             if path.is_file() and path.suffix.lower() in SUPPORTED_EXTENSIONS:
                 keys.add(self._file_key(path))
         return keys
@@ -101,8 +108,10 @@ class _Watcher:
             self._stop_event.wait(self.interval)
 
     def _poll(self):
-        new_files: list[tuple[Path, str]] = []
-        for path in self.watch_path.glob("*"):
+        # First pass: collect candidate new files
+        candidates: list[tuple[Path, str, str]] = []
+        pattern = "**/*" if self.recursive else "*"
+        for path in self.watch_path.glob(pattern):
             if not path.is_file():
                 continue
             ft = SUPPORTED_EXTENSIONS.get(path.suffix.lower())
@@ -110,17 +119,25 @@ class _Watcher:
                 continue
             key = self._file_key(path)
             if key not in self._seen:
-                # Wait a moment then re-check size to ensure file is fully written
-                time.sleep(1)
-                try:
-                    new_key = self._file_key(path)
-                except OSError:
-                    continue
-                if new_key != key:
-                    # File still being written, skip for now
-                    continue
-                self._seen.add(new_key)
-                new_files.append((path, ft))
+                candidates.append((path, ft, key))
+
+        if not candidates:
+            return
+
+        # Wait once then re-check all candidates for stability (file fully written)
+        time.sleep(1)
+
+        new_files: list[tuple[Path, str]] = []
+        for path, ft, key in candidates:
+            try:
+                new_key = self._file_key(path)
+            except OSError:
+                continue
+            if new_key != key:
+                # Still being written — will be picked up next poll
+                continue
+            self._seen.add(new_key)
+            new_files.append((path, ft))
 
         if not new_files:
             return
@@ -135,12 +152,17 @@ class _Watcher:
             dest_dir = build_folder_path(self.dest_path, date_taken, "", self.date_format)
             file_moves.append((path, dest_dir))
 
+        # Log what we're about to process
+        for path, _ in new_files:
+            self._add_log("ok", f"Detected: {path.name}")
+
         # Execute
         results = execute_plan(file_moves, self.operation)
         for r in results:
             self._files_processed += 1
             if r.success:
-                self._add_log("ok", f"{r.source.name} → {r.destination}")
+                op = "→" if self.operation == "move" else "copied →"
+                self._add_log("ok", f"{r.source.name} {op} {r.destination.parent.name}")
             else:
                 self._add_log("error", f"{r.source.name}: {r.error}")
 
@@ -163,7 +185,8 @@ def start_watcher(
     dest_path: str | Path,
     operation: str = "copy",
     date_format: str = "yymmdd",
-    interval: int = 5,
+    interval: int = 3,
+    recursive: bool = False,
 ) -> dict:
     global _watcher
     with _watcher_lock:
@@ -175,6 +198,7 @@ def start_watcher(
             operation=operation,
             date_format=date_format,
             interval=interval,
+            recursive=recursive,
         )
         _watcher.start()
         return _watcher.status()

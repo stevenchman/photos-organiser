@@ -148,7 +148,10 @@ def extract_thumbnail(file_path: Path, max_size: tuple[int, int]) -> bytes | Non
 
     # Standard image (JPEG, PNG, etc.)
     try:
+        from PIL import ImageOps
         img = Image.open(file_path)
+        img.load()                           # force EXIF data into memory before transpose
+        img = ImageOps.exif_transpose(img)   # auto-rotate by EXIF orientation tag
         img.thumbnail(max_size, Image.LANCZOS)
         if img.mode not in ("RGB", "L"):
             img = img.convert("RGB")
@@ -169,7 +172,10 @@ def _thumbnail_from_raw(file_path: Path, max_size: tuple[int, int]) -> bytes | N
         with rawpy.imread(str(file_path)) as raw:
             thumb = raw.extract_thumb()
         if thumb.format == rawpy.ThumbFormat.JPEG:
-            img = Image.open(io.BytesIO(thumb.data))
+            from PIL import ImageOps
+            img = Image.open(io.BytesIO(bytes(thumb.data)))
+            img.load()
+            img = ImageOps.exif_transpose(img)
             img.thumbnail(max_size, Image.LANCZOS)
             if img.mode not in ("RGB", "L"):
                 img = img.convert("RGB")

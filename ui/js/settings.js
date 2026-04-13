@@ -9,7 +9,12 @@ const Settings = (() => {
   let _pickerCurrentPath = "";
   let _pickerSelectedPath = "";
 
-  const HISTORY_KEY    = 'ph-path-history';
+  const HISTORY_KEYS = {
+    'source-path':      'ph-history-source',
+    'dest-path':        'ph-history-dest',
+    'watch-path':       'ph-history-watch',
+    'watch-dest-path':  'ph-history-watch-dest',
+  };
   const HISTORY_LIMIT  = 10;
   const WATCH_PATH_KEY = 'ph-watch-path';
   const WATCH_DEST_KEY = 'ph-watch-dest';
@@ -35,23 +40,34 @@ const Settings = (() => {
 
   // ── History helpers ────────────────────────────────────────────────────────
 
-  function _loadHistory() {
-    try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]"); }
+  function _loadHistory(storageKey) {
+    try { return JSON.parse(localStorage.getItem(storageKey) || "[]"); }
     catch { return []; }
   }
 
-  function _saveToHistory(path) {
+  function _saveToHistory(inputId, path) {
     if (!path) return;
-    let h = _loadHistory().filter(p => p !== path);
+    const storageKey = HISTORY_KEYS[inputId];
+    if (!storageKey) return;
+    let h = _loadHistory(storageKey).filter(p => p !== path);
     h.unshift(path);
     h = h.slice(0, HISTORY_LIMIT);
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
+    localStorage.setItem(storageKey, JSON.stringify(h));
   }
 
-  function _buildHistoryDropdown(dropdownEl, inputEl) {
-    const history = _loadHistory();
+  function _buildHistoryDropdown(dropdownEl, inputEl, storageKey, showEmpty = false) {
+    const history = _loadHistory(storageKey);
     dropdownEl.innerHTML = "";
-    if (!history.length) { dropdownEl.classList.remove("open"); return; }
+
+    if (!history.length) {
+      if (!showEmpty) { dropdownEl.classList.remove("open"); return; }
+      const empty = document.createElement("div");
+      empty.className = "path-history-empty";
+      empty.textContent = "No recent paths yet";
+      dropdownEl.appendChild(empty);
+      dropdownEl.classList.add("open");
+      return;
+    }
 
     history.forEach(p => {
       const item = document.createElement("div");
@@ -68,16 +84,32 @@ const Settings = (() => {
   }
 
   function _attachHistoryBehaviour(inputId, dropdownId) {
-    const input    = document.getElementById(inputId);
-    const dropdown = document.getElementById(dropdownId);
-    if (!input || !dropdown) return;
+    const input      = document.getElementById(inputId);
+    const dropdown   = document.getElementById(dropdownId);
+    const storageKey = HISTORY_KEYS[inputId];
+    if (!input || !dropdown || !storageKey) return;
 
-    input.addEventListener("focus", () => _buildHistoryDropdown(dropdown, input));
+    // Chevron button lives in the same .path-row as the input
+    const pathRow = input.closest(".path-row");
+    const chevron = pathRow?.querySelector(".path-history-btn");
+    if (chevron) {
+      chevron.addEventListener("mousedown", e => {
+        e.preventDefault();
+        if (dropdown.classList.contains("open")) {
+          dropdown.classList.remove("open");
+        } else {
+          _buildHistoryDropdown(dropdown, input, storageKey, true);
+        }
+      });
+    }
+
+    input.addEventListener("focus", () => _buildHistoryDropdown(dropdown, input, storageKey));
     input.addEventListener("input", () => {
-      if (!input.value) _buildHistoryDropdown(dropdown, input);
+      if (!input.value) _buildHistoryDropdown(dropdown, input, storageKey, true);
       else dropdown.classList.remove("open");
     });
     input.addEventListener("blur", () => {
+      if (input.value.trim()) _saveToHistory(inputId, input.value.trim());
       setTimeout(() => dropdown.classList.remove("open"), 150);
     });
   }
@@ -96,7 +128,10 @@ const Settings = (() => {
       if (files && files.length) {
         // Use the dropped path (works in Electron; in browser gives C:\fakepath)
         const rawPath = files[0].path || files[0].name;
-        if (rawPath && !rawPath.includes("fakepath")) input.value = rawPath;
+        if (rawPath && !rawPath.includes("fakepath")) {
+          input.value = rawPath;
+          _saveToHistory(inputId, rawPath);
+        }
       }
     });
   }
@@ -108,16 +143,22 @@ const Settings = (() => {
 
     // Load saved settings
     API.getSettings().then(s => {
-      document.getElementById("source-path").value = s.source_path || "";
-      document.getElementById("dest-path").value   = s.dest_path   || "";
+      const sourcePath = s.source_path || "";
+      const destPath   = s.dest_path   || "";
+      document.getElementById("source-path").value = sourcePath;
+      document.getElementById("dest-path").value   = destPath;
+      // Save to history on load so they appear in dropdowns immediately
+      if (sourcePath) _saveToHistory("source-path", sourcePath);
+      if (destPath)   _saveToHistory("dest-path",   destPath);
       _setOperation(s.operation || "copy");
       _setMode(s.mode || "exif");
 
       _dateFormat = s.date_format || "yymmdd";
       _setDateFormat(_dateFormat);
 
-      const depthInput = document.getElementById("scan-depth");
-      if (depthInput) depthInput.value = s.scan_depth ?? 0;
+      // scan_depth 0 = unlimited (subfolders on), 1 = top-level only (off)
+      const subfoldersEl = document.getElementById("scan-subfolders");
+      if (subfoldersEl) subfoldersEl.checked = (s.scan_depth === 0 || !s.scan_depth);
 
       if (!s.has_api_key) {
         document.getElementById("api-key-field").style.display = "block";
@@ -171,11 +212,6 @@ const Settings = (() => {
     // Watcher controls
     document.getElementById("watcher-start-btn").addEventListener("click", _startWatcher);
     document.getElementById("watcher-stop-btn").addEventListener("click",  _stopWatcher);
-    document.getElementById("watcher-log-toggle").addEventListener("click", () => {
-      _watcherLogOpen = !_watcherLogOpen;
-      document.getElementById("watcher-log").classList.toggle("open", _watcherLogOpen);
-      document.getElementById("watcher-log-toggle").textContent = _watcherLogOpen ? "Hide log" : "Show log";
-    });
     document.getElementById("watch-op-copy").addEventListener("click", () => _setWatchOp("copy"));
     document.getElementById("watch-op-move").addEventListener("click", () => _setWatchOp("move"));
 
@@ -234,10 +270,11 @@ const Settings = (() => {
     if (!source) { _showError("Please set a source folder."); return; }
     if (!dest)   { _showError("Please set a destination folder."); return; }
 
-    const apiKey    = document.getElementById("api-key-input").value.trim();
-    const mode      = _getMode();
-    const op        = _getOperation();
-    const scanDepth = parseInt(document.getElementById("scan-depth")?.value || "0", 10);
+    const apiKey      = document.getElementById("api-key-input").value.trim();
+    const mode        = _getMode();
+    const op          = _getOperation();
+    const subfolders  = document.getElementById("scan-subfolders")?.checked !== false;
+    const scanDepth   = subfolders ? 0 : 1;
 
     try {
       await API.saveSettings({
@@ -249,8 +286,8 @@ const Settings = (() => {
         scan_depth:  scanDepth,
         api_key:     apiKey,
       });
-      _saveToHistory(source);
-      _saveToHistory(dest);
+      _saveToHistory("source-path", source);
+      _saveToHistory("dest-path",   dest);
       _clearError();
       _onStart && _onStart({ source, dest, mode, operation: op });
     } catch (e) {
@@ -298,11 +335,12 @@ const Settings = (() => {
     }
     localStorage.setItem(WATCH_PATH_KEY, watchPath);
     localStorage.setItem(WATCH_DEST_KEY, destPath);
-    _saveToHistory(watchPath);
-    _saveToHistory(destPath);
+    _saveToHistory("watch-path",      watchPath);
+    _saveToHistory("watch-dest-path", destPath);
 
+    const recursive = document.getElementById("watch-subfolders")?.checked || false;
     try {
-      await API.watcherStart(watchPath, destPath, _watchOp, _dateFormat);
+      await API.watcherStart(watchPath, destPath, _watchOp, _dateFormat, recursive);
       _updateWatcherUI(await API.watcherStatus());
       _startWatcherPoll();
     } catch (e) {
@@ -344,34 +382,55 @@ const Settings = (() => {
     } catch { /* server not ready yet */ }
   }
 
+  let _lastFeedLength = 0;
+
   function _updateWatcherUI(status) {
-    const dot     = document.getElementById("watcher-dot");
-    const text    = document.getElementById("watcher-status-text");
-    const count   = document.getElementById("watcher-files-count");
+    const dot      = document.getElementById("watcher-dot");
+    const text     = document.getElementById("watcher-status-text");
+    const count    = document.getElementById("watcher-files-count");
     const startBtn = document.getElementById("watcher-start-btn");
     const stopBtn  = document.getElementById("watcher-stop-btn");
-    const logToggle = document.getElementById("watcher-log-toggle");
+    const activity = document.getElementById("watcher-activity");
+    const feed     = document.getElementById("watcher-feed");
 
     dot.classList.toggle("running", !!status.running);
-    text.textContent = status.running
-      ? `Running — watching ${status.watch_path || ""}`
-      : "Not running";
+
+    if (status.running) {
+      text.textContent = "Watching";
+    } else {
+      text.textContent = status.files_processed > 0 ? "Stopped" : "Not running";
+    }
+
     count.textContent = status.files_processed > 0
-      ? `${status.files_processed} file${status.files_processed !== 1 ? "s" : ""} processed`
+      ? `· ${status.files_processed} file${status.files_processed !== 1 ? "s" : ""} organised`
       : "";
 
     startBtn.style.display = status.running ? "none" : "";
     stopBtn.style.display  = status.running ? "" : "none";
-    logToggle.style.display = (status.log && status.log.length) ? "" : "none";
 
-    // Render log
+    // Show activity panel whenever running or there's history
+    const hasActivity = status.running || (status.log && status.log.length > 0);
+    activity.style.display = hasActivity ? "block" : "none";
+
+    // Render feed entries
     if (status.log && status.log.length) {
-      const logEl = document.getElementById("watcher-log");
-      logEl.innerHTML = status.log.slice().reverse().map(entry =>
-        `<div class="watcher-log-entry ${entry.level}">
-          <span style="opacity:0.5;margin-right:8px">${entry.time.slice(11)}</span>${_esc(entry.message)}
-        </div>`
-      ).join("");
+      // Only re-render if new entries arrived
+      if (status.log.length !== _lastFeedLength) {
+        _lastFeedLength = status.log.length;
+        const entries = status.log.slice().reverse(); // newest first
+        feed.innerHTML = entries.map(entry => {
+          const icon = entry.level === "ok" ? "✓" : "✕";
+          const time = entry.time.slice(11, 16); // HH:MM
+          return `<div class="watcher-feed-entry ${entry.level}">
+            <span class="watcher-feed-icon">${icon}</span>
+            <span class="watcher-feed-msg">${_esc(entry.message)}</span>
+            <span class="watcher-feed-time">${time}</span>
+          </div>`;
+        }).join("");
+      }
+    } else if (status.running) {
+      feed.innerHTML = `<div class="watcher-feed-waiting">Waiting for new files…</div>`;
+      _lastFeedLength = 0;
     }
   }
 
@@ -416,6 +475,7 @@ const Settings = (() => {
     if (!_pickerSelectedPath) { _closePicker(); return; }
     const inputId = _pickerInputId(_pickerTarget);
     document.getElementById(inputId).value = _pickerSelectedPath;
+    _saveToHistory(inputId, _pickerSelectedPath);
     _closePicker();
   }
 

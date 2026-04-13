@@ -6,6 +6,8 @@ const Preview = (() => {
   let _scanData = null;
   let _combineMode = false;
   let _selectedForCombine = new Set();
+  let _galleryMode = localStorage.getItem("ph-view-mode") === "gallery";
+  let _galleryScale = parseInt(localStorage.getItem("ph-gallery-scale") || "200", 10);
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -16,8 +18,29 @@ const Preview = (() => {
 
     const container = document.getElementById("groups-container");
     container.innerHTML = "";
-    for (const group of scanData.groups) {
-      container.appendChild(_buildGroupCard(group, scanData.scan_id));
+
+    if (_galleryMode) {
+      container.className = "gallery-grid";
+      container.style.setProperty("--gallery-card-w", _galleryScale + "px");
+      for (const group of scanData.groups) {
+        container.appendChild(_buildGalleryCard(group, scanData.scan_id));
+      }
+    } else {
+      container.className = "";
+      container.style.removeProperty("--gallery-card-w");
+      for (const group of scanData.groups) {
+        container.appendChild(_buildGroupCard(group, scanData.scan_id));
+      }
+    }
+
+    _syncViewButtons();
+
+    const blurrySection = document.getElementById("blurry-section");
+    if (scanData.blurry_files && scanData.blurry_files.length > 0) {
+      blurrySection.style.display = "block";
+      _renderBlurryFiles(scanData.blurry_files, scanData.scan_id);
+    } else {
+      blurrySection.style.display = "none";
     }
 
     const undatedSection = document.getElementById("undated-section");
@@ -30,6 +53,7 @@ const Preview = (() => {
 
     _updateFooter();
     _initCombineMode();
+    _initViewControls();
   }
 
   // ── Group card ─────────────────────────────────────────────────────────────
@@ -67,7 +91,11 @@ const Preview = (() => {
           <div class="date-label">${dateLabel}</div>
           <div class="file-count">${group.file_count} ${fileWord}</div>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          ${group._merged_from ? `
+            <span class="badge badge-info" style="font-size:0.7rem;">&#x2B1C; ${group._merged_from.length + 1} groups combined</span>
+            <button class="btn-secondary btn-sm" onclick="Preview.uncombineGroup('${group.group_id}')" style="font-size:0.72rem;padding:2px 8px;">Uncombine</button>
+          ` : ""}
           <div id="ai-status-${group.group_id}"></div>
           <input type="checkbox" class="combine-checkbox" data-group-id="${group.group_id}"
                  style="display:none;accent-color:var(--amber)" title="Select for combine">
@@ -102,6 +130,89 @@ const Preview = (() => {
     `;
 
     return card;
+  }
+
+  // ── Gallery card ──────────────────────────────────────────────────────────
+
+  function _buildGalleryCard(group, scanId) {
+    const card = document.createElement("div");
+    card.className = "gallery-card" + (group.skip ? " skipped" : "");
+    card.dataset.groupId = group.group_id;
+
+    const dateObj   = new Date(group.date + "T00:00:00");
+    const dateLabel = dateObj.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    const sampleIsVideo = group.sample_file_type && ["mp4","insv","insp","360"].includes(group.sample_file_type);
+
+    let thumbHtml;
+    if (group.has_sample_image && group.sample_token) {
+      thumbHtml = `<img class="gallery-thumb"
+        src="${API.thumbnailUrl(scanId, group.group_id)}"
+        alt=""
+        onclick="Preview.openGroupLightbox('${scanId}','${group.group_id}','${group.sample_token}','${group.sample_file_type}','${_escAttr(group.proposed_folder_name)}')"
+        onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+        <div class="gallery-thumb-placeholder" style="display:none"
+          onclick="Preview.openGroupLightbox('${scanId}','${group.group_id}','${group.sample_token}','${group.sample_file_type}','${_escAttr(group.proposed_folder_name)}')">${sampleIsVideo ? "🎬" : "🖼"}</div>`;
+    } else {
+      thumbHtml = `<div class="gallery-thumb-placeholder">📷</div>`;
+    }
+
+    card.innerHTML = `
+      <div class="gallery-thumb-wrap">
+        ${thumbHtml}
+        <div class="gallery-overlay-count">${group.file_count}</div>
+        ${group._merged_from ? `<div class="gallery-overlay-combined">Combined</div>` : ""}
+        <input type="checkbox" class="combine-checkbox gallery-combine-cb" data-group-id="${group.group_id}"
+               style="display:none;position:absolute;top:6px;left:6px;accent-color:var(--amber);width:16px;height:16px" title="Select for combine">
+      </div>
+      <div class="gallery-info">
+        <div class="gallery-date">${dateLabel}</div>
+        <input type="text" id="desc-${group.group_id}"
+               class="gallery-desc"
+               placeholder="Add description…"
+               value="${_escAttr(group.description || '')}"
+               autocomplete="off">
+        <label class="gallery-skip-label">
+          <input type="checkbox" id="skip-${group.group_id}" ${group.skip ? "checked" : ""}
+                 onchange="Preview.toggleSkip('${group.group_id}', this.checked)">
+          Skip
+        </label>
+      </div>
+    `;
+    return card;
+  }
+
+  // ── View mode controls ─────────────────────────────────────────────────────
+
+  function _syncViewButtons() {
+    document.getElementById("view-list-btn")?.classList.toggle("active", !_galleryMode);
+    document.getElementById("view-gallery-btn")?.classList.toggle("active", _galleryMode);
+    const scaleWrap = document.getElementById("gallery-scale-wrap");
+    if (scaleWrap) scaleWrap.style.display = _galleryMode ? "flex" : "none";
+    const scaleEl = document.getElementById("gallery-scale");
+    if (scaleEl) scaleEl.value = _galleryScale;
+  }
+
+  let _viewControlsInited = false;
+  function _initViewControls() {
+    _syncViewButtons();
+    if (_viewControlsInited) return;
+    _viewControlsInited = true;
+
+    document.getElementById("view-list-btn")?.addEventListener("click", () => {
+      _galleryMode = false;
+      localStorage.setItem("ph-view-mode", "list");
+      if (_scanData) render(_scanData);
+    });
+    document.getElementById("view-gallery-btn")?.addEventListener("click", () => {
+      _galleryMode = true;
+      localStorage.setItem("ph-view-mode", "gallery");
+      if (_scanData) render(_scanData);
+    });
+    document.getElementById("gallery-scale")?.addEventListener("input", e => {
+      _galleryScale = parseInt(e.target.value, 10);
+      localStorage.setItem("ph-gallery-scale", _galleryScale);
+      document.getElementById("groups-container")?.style.setProperty("--gallery-card-w", _galleryScale + "px");
+    });
   }
 
   // ── File table ─────────────────────────────────────────────────────────────
@@ -162,6 +273,50 @@ const Preview = (() => {
       filename: f.filename,
     }));
     Lightbox.open(scanId, file.thumbnail_token, file.file_type, filename, filmstrip);
+  }
+
+  // ── Blurry files ───────────────────────────────────────────────────────────
+
+  function _renderBlurryFiles(files, scanId) {
+    const container = document.getElementById("blurry-files-container");
+    container.innerHTML = "";
+    for (const f of files) {
+      const score = f.blur_score ?? 0;
+      const pct   = Math.min(100, Math.round((score / 80) * 100)); // 80 = threshold
+      let level, levelClass;
+      if (score < 20)       { level = "Very blurry";     levelClass = "badge-danger"; }
+      else if (score < 50)  { level = "Quite blurry";    levelClass = "badge-warn"; }
+      else                  { level = "Slightly blurry"; levelClass = "badge-amber"; }
+
+      const row = document.createElement("div");
+      row.className = "blurry-row";
+      row.innerHTML = `
+        <input type="checkbox" class="blurry-keep-cb" data-token="${f.thumbnail_token}" checked
+               title="Keep this photo">
+        <img class="file-thumb blurry-thumb"
+             src="${API.fileThumbnailUrl(scanId, f.thumbnail_token)}"
+             alt=""
+             onclick="Lightbox.open('${scanId}','${f.thumbnail_token}','${f.file_type}','${_escAttr(f.filename)}')"
+             style="cursor:pointer"
+             onerror="this.style.display='none'">
+        <div class="blurry-info">
+          <span class="blurry-name">${_esc(f.filename)}</span>
+          <span class="badge ${levelClass}">${level}</span>
+          <div class="blur-meter-track">
+            <div class="blur-meter-fill" style="width:${pct}%"></div>
+          </div>
+        </div>
+      `;
+      container.appendChild(row);
+    }
+  }
+
+  function collectBlurSkips() {
+    const skipped = [];
+    document.querySelectorAll(".blurry-keep-cb").forEach(cb => {
+      if (!cb.checked) skipped.push(cb.dataset.token);
+    });
+    return skipped;
   }
 
   // ── Undated files ──────────────────────────────────────────────────────────
@@ -253,11 +408,44 @@ const Preview = (() => {
     targets.sort((a, b) => a.date < b.date ? -1 : 1);
     const base   = targets[0];
     const others = targets.slice(1);
+    const latest = targets[targets.length - 1];
 
-    for (const g of others) {
+    // Flatten merge history: if base was already a combined group, absorb its
+    // prior _merged_from so uncombine always restores fully to original state.
+    let allMergedFrom, originalBaseFiles, originalFolderName;
+    if (base._merged_from) {
+      allMergedFrom      = [...base._merged_from, ...others];
+      originalBaseFiles  = base._original_files;
+      originalFolderName = base._original_folder_name;
+    } else {
+      allMergedFrom      = others;
+      originalBaseFiles  = [...base.files];
+      originalFolderName = base.proposed_folder_name;
+    }
+
+    base._original_files       = originalBaseFiles;
+    base._original_folder_name = originalFolderName;
+    base._merged_from          = allMergedFrom;
+
+    // Rebuild files: original base files + every merged group's current files
+    base.files = [...originalBaseFiles];
+    for (const g of allMergedFrom) {
       base.files.push(...g.files);
     }
     base.file_count = base.files.length;
+
+    // Date range: start = base.date (earliest), end = latest across all constituents
+    const allEndDates = allMergedFrom.map(g => g.end_date || g.date);
+    const trueEndDate = allEndDates.reduce((max, d) => d > max ? d : max, base.date);
+    if (trueEndDate !== base.date) {
+      base.end_date = trueEndDate;
+      const startShort = _isoToDisplay(base.date);
+      const endShort   = _isoToDisplay(trueEndDate);
+      base.proposed_folder_name = `${startShort}-${endShort}`;
+    } else {
+      base.end_date = null;
+      base.proposed_folder_name = originalFolderName;
+    }
 
     // Remove merged groups from scanData
     _scanData.groups = groups.filter(g => !ids.includes(g.group_id) || g.group_id === base.group_id);
@@ -266,6 +454,37 @@ const Preview = (() => {
     // Re-render
     _exitCombineMode();
     render(_scanData);
+  }
+
+  function uncombineGroup(groupId) {
+    const g = _scanData?.groups.find(g => g.group_id === groupId);
+    if (!g || !g._merged_from) return;
+
+    // Restore original state
+    g.files               = g._original_files;
+    g.file_count          = g._original_files.length;
+    g.proposed_folder_name = g._original_folder_name;
+    delete g.end_date;
+
+    // Re-insert the split-off groups right after this one, sorted by date
+    const idx = _scanData.groups.indexOf(g);
+    _scanData.groups.splice(idx + 1, 0, ...g._merged_from);
+    _scanData.group_count = _scanData.groups.length;
+
+    delete g._merged_from;
+    delete g._original_files;
+    delete g._original_folder_name;
+
+    render(_scanData);
+  }
+
+  // Convert ISO date string "2021-04-02" → "210402" (yymmdd)
+  function _isoToDisplay(isoDate) {
+    const d = new Date(isoDate + "T00:00:00");
+    const yy = String(d.getFullYear()).slice(2);
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yy}${mm}${dd}`;
   }
 
   // ── Public card controls ───────────────────────────────────────────────────
@@ -331,6 +550,7 @@ const Preview = (() => {
       group_id:    g.group_id,
       description: document.getElementById(`desc-${g.group_id}`)?.value.trim() || "",
       skip:        document.getElementById(`skip-${g.group_id}`)?.checked || false,
+      end_date:    g.end_date || null,
     }));
   }
 
@@ -361,7 +581,8 @@ const Preview = (() => {
     toggleFileList, toggleSkip,
     showAiResult, applyAiSuggestion,
     openGroupLightbox, openFileLightbox,
-    collectGroups, collectUndatedAssignments,
+    collectGroups, collectUndatedAssignments, collectBlurSkips,
     useFileMtime,
+    uncombineGroup,
   };
 })();

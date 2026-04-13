@@ -28,7 +28,40 @@
   <!-- Header -->
   <header>
     <div class="header-left">
-      <div class="header-logo">📷</div>
+      <div class="header-logo">
+        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" width="28" height="28">
+          <defs>
+            <linearGradient id="hdr-bg" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#FF8C00"/>
+              <stop offset="100%" stop-color="#B45A00"/>
+            </linearGradient>
+          </defs>
+          <!-- background -->
+          <rect width="100" height="100" rx="20" fill="url(#hdr-bg)"/>
+          <!-- camera body -->
+          <rect x="19" y="13" width="62" height="76" rx="9"
+                fill="none" stroke="rgba(255,255,255,0.92)" stroke-width="4.8"/>
+          <!-- hood fill -->
+          <rect x="21.5" y="15.5" width="57" height="11" rx="6"
+                fill="rgba(255,255,255,0.11)"/>
+          <!-- hood bottom line -->
+          <line x1="21" y1="26.5" x2="79" y2="26.5"
+                stroke="rgba(255,255,255,0.30)" stroke-width="1.8"/>
+          <!-- viewing lens -->
+          <circle cx="50" cy="41.5" r="17"
+                  fill="none" stroke="rgba(255,255,255,0.92)" stroke-width="4.8"/>
+          <circle cx="50" cy="41.5" r="8.8" fill="rgba(255,255,255,0.22)"/>
+          <circle cx="56" cy="35" r="2.2" fill="rgba(255,255,255,0.82)"/>
+          <!-- taking lens -->
+          <circle cx="50" cy="68.5" r="21"
+                  fill="none" stroke="rgba(255,255,255,0.92)" stroke-width="4.8"/>
+          <circle cx="50" cy="68.5" r="11.4" fill="rgba(255,255,255,0.22)"/>
+          <circle cx="55.5" cy="61" r="2.8" fill="rgba(255,255,255,0.82)"/>
+          <!-- winding knobs -->
+          <rect x="12" y="47" width="6" height="16" rx="3" fill="rgba(255,255,255,0.70)"/>
+          <rect x="82" y="47" width="6" height="16" rx="3" fill="rgba(255,255,255,0.70)"/>
+        </svg>
+      </div>
       <h1>Photos Organiser</h1>
     </div>
     <div class="header-actions">
@@ -52,6 +85,7 @@
         <label>Source folder <em style="color:var(--text-muted)">(where your unorganised files are)</em></label>
         <div class="path-row" id="source-path-row">
           <input type="text" id="source-path" placeholder="e.g. D:\Camera Imports" autocomplete="off">
+          <button class="btn-icon path-history-btn" title="Recent paths">▾</button>
           <button class="btn-secondary" id="browse-source">Browse…</button>
           <div class="path-history-dropdown" id="source-history"></div>
         </div>
@@ -61,6 +95,7 @@
         <label>Destination folder <em style="color:var(--text-muted)">(where the organised library will live)</em></label>
         <div class="path-row" id="dest-path-row">
           <input type="text" id="dest-path" placeholder="e.g. E:\Photos Library" autocomplete="off">
+          <button class="btn-icon path-history-btn" title="Recent paths">▾</button>
           <button class="btn-secondary" id="browse-dest">Browse…</button>
           <div class="path-history-dropdown" id="dest-history"></div>
         </div>
@@ -100,12 +135,9 @@
         <p style="font-size:0.78rem;color:var(--text-muted);margin-top:6px" id="date-format-preview"></p>
       </div>
 
-      <div class="field">
-        <label>Scan depth <em style="color:var(--text-muted)">(0 = unlimited)</em></label>
-        <div style="display:flex;align-items:center;gap:10px">
-          <input type="number" id="scan-depth" min="0" max="10" value="0" style="width:80px">
-          <span style="font-size:0.8rem;color:var(--text-muted)">Subfolders deep to scan (0 = all)</span>
-        </div>
+      <div class="field" style="display:flex;align-items:center;gap:10px">
+        <input type="checkbox" id="scan-subfolders" checked>
+        <label for="scan-subfolders" style="margin:0;color:var(--text-mid);font-size:0.88rem;cursor:pointer">Scan subfolders</label>
       </div>
 
       <div id="ai-key-section" style="display:none">
@@ -133,47 +165,59 @@
       <!-- ── WATCHER SECTION ─────────────────────────────────────────── -->
       <div class="watcher-section">
         <h3>Auto-watcher</h3>
-        <p class="subtitle">Monitor a folder for new files and organise them automatically.</p>
-
-        <div id="watcher-status-bar" class="watcher-status-bar">
-          <div class="watcher-status-dot" id="watcher-dot"></div>
-          <span id="watcher-status-text">Not running</span>
-          <span id="watcher-files-count" style="margin-left:auto;color:var(--text-dim)"></span>
-        </div>
+        <p class="subtitle">Drop new files into a watch folder and they'll be organised automatically.</p>
 
         <div class="field">
           <label>Watch folder</label>
           <div class="path-row" id="watch-path-row">
             <input type="text" id="watch-path" placeholder="e.g. D:\Camera Import Drop" autocomplete="off">
+            <button class="btn-icon path-history-btn" title="Recent paths">▾</button>
             <button class="btn-secondary" id="browse-watch">Browse…</button>
             <div class="path-history-dropdown" id="watch-history"></div>
           </div>
         </div>
 
         <div class="field">
-          <label>Watcher destination</label>
+          <label>Destination</label>
           <div class="path-row" id="watch-dest-path-row">
             <input type="text" id="watch-dest-path" placeholder="e.g. E:\Photos Library" autocomplete="off">
+            <button class="btn-icon path-history-btn" title="Recent paths">▾</button>
             <button class="btn-secondary" id="browse-watch-dest">Browse…</button>
             <div class="path-history-dropdown" id="watch-dest-history"></div>
           </div>
         </div>
 
         <div class="field">
-          <label>Watcher operation</label>
+          <label>Operation</label>
           <div class="toggle-group">
             <button id="watch-op-copy" class="active">Copy</button>
             <button id="watch-op-move">Move</button>
           </div>
         </div>
 
-        <div style="display:flex;gap:10px;flex-wrap:wrap">
-          <button class="btn-primary" id="watcher-start-btn">▶ Start watcher</button>
-          <button class="btn-secondary" id="watcher-stop-btn" style="display:none">■ Stop watcher</button>
-          <button class="btn-ghost btn-sm" id="watcher-log-toggle" style="display:none">Show log</button>
+        <div class="field" style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+          <input type="checkbox" id="watch-subfolders">
+          <label for="watch-subfolders" style="margin:0;color:var(--text-mid);font-size:0.88rem;cursor:pointer">Include subfolders</label>
         </div>
 
-        <div id="watcher-log" class="watcher-log"></div>
+        <div class="watcher-controls">
+          <button class="btn-primary" id="watcher-start-btn">▶ Start watcher</button>
+          <button class="btn-secondary" id="watcher-stop-btn" style="display:none">■ Stop</button>
+          <div class="watcher-status-pill" id="watcher-status-pill">
+            <div class="watcher-status-dot" id="watcher-dot"></div>
+            <span id="watcher-status-text">Not running</span>
+            <span id="watcher-files-count"></span>
+          </div>
+        </div>
+
+        <!-- Activity feed — always visible when running or has history -->
+        <div id="watcher-activity" class="watcher-activity" style="display:none">
+          <div class="watcher-activity-header">
+            <span class="watcher-activity-title">Activity</span>
+            <span class="watcher-file-types">Watches: JPG · RAF · DNG · MP4 · INSV · INSP · 360</span>
+          </div>
+          <div id="watcher-feed" class="watcher-feed"></div>
+        </div>
       </div><!-- /watcher -->
     </div><!-- /settings -->
 
@@ -195,7 +239,16 @@
           <h2>Review organisation plan</h2>
           <p id="preview-group-count" class="subtitle"></p>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <div class="toggle-group">
+            <button id="view-list-btn" class="active" title="List view">☰</button>
+            <button id="view-gallery-btn" title="Gallery view">⊞</button>
+          </div>
+          <div id="gallery-scale-wrap" style="display:none;align-items:center;gap:6px">
+            <span style="font-size:0.72rem;color:var(--text-dim)">Size</span>
+            <input type="range" id="gallery-scale" min="140" max="360" step="20" value="200"
+                   style="width:80px;accent-color:var(--amber)">
+          </div>
           <button class="btn-secondary btn-sm" id="combine-mode-btn">Combine groups</button>
           <button class="btn-secondary" id="back-to-settings">← Back</button>
           <button class="btn-primary" id="suggest-all-btn" style="display:none">✦ Get AI Names</button>
@@ -210,6 +263,15 @@
 
       <div id="preview-alert" class="alert" style="display:none"></div>
       <div id="groups-container"></div>
+
+      <!-- Blurry photos -->
+      <div id="blurry-section" class="blurry-section" style="display:none">
+        <h3>⚠ Blurry photos detected</h3>
+        <p style="font-size:0.83rem;color:var(--text-muted);margin-bottom:14px">
+          These photos scored below the sharpness threshold. Uncheck any you'd like to discard — checked photos will still be organised normally.
+        </p>
+        <div id="blurry-files-container"></div>
+      </div>
 
       <!-- Undated files -->
       <div id="undated-section" class="undated-section" style="display:none">

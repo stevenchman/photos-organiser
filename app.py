@@ -13,7 +13,11 @@ from flask import Flask, send_from_directory
 
 load_dotenv()
 
-# Ensure scoop shims (ffmpeg, ffprobe) are on PATH
+# Add ffmpeg to PATH — bundled copy (set by Electron when packaged) takes priority
+_ffmpeg_dir = os.environ.get("FFMPEG_DIR")
+if _ffmpeg_dir and Path(_ffmpeg_dir).exists():
+    os.environ["PATH"] = _ffmpeg_dir + os.pathsep + os.environ.get("PATH", "")
+# Development fallback: scoop shims
 _scoop_shims = Path.home() / "scoop" / "shims"
 if _scoop_shims.exists():
     os.environ["PATH"] = str(_scoop_shims) + os.pathsep + os.environ.get("PATH", "")
@@ -28,7 +32,8 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
 app.register_blueprint(api_bp)
 
-UI_DIR = Path(__file__).parent / "ui"
+UI_DIR     = Path(__file__).parent / "ui"
+ASSETS_DIR = Path(__file__).parent / "assets"
 
 
 @app.get("/")
@@ -44,6 +49,11 @@ def css(filename):
 @app.get("/js/<path:filename>")
 def js(filename):
     return send_from_directory(UI_DIR / "js", filename)
+
+
+@app.get("/assets/<path:filename>")
+def assets(filename):
+    return send_from_directory(ASSETS_DIR, filename)
 
 
 def _open_browser():

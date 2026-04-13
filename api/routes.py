@@ -24,6 +24,7 @@ from core.ai_vision import AIVisionError, suggest_group_name, validate_api_key
 from core.grouper import DayGroup, group_by_date
 from core.metadata import extract_thumbnail, ffprobe_available
 from core.mover import MoveResult, execute_plan, preflight_check
+from core.blur import BLUR_THRESHOLD
 from core.namer import build_folder_path, DATE_FORMATS, DEFAULT_DATE_FORMAT
 from core.scanner import FileRecord, scan
 from core.watcher import start_watcher, stop_watcher, watcher_status
@@ -63,6 +64,8 @@ def _group_to_dict(g: DayGroup) -> dict:
             "date_source": f.date_source,
             "source_path": str(f.source_path),
             "thumbnail_token": f.thumbnail_token,
+            "blur_score": f.blur_score,
+            "is_blurry": f.blur_score is not None and f.blur_score < BLUR_THRESHOLD,
         })
     return {
         "group_id": g.group_id,
@@ -87,6 +90,8 @@ def _record_to_dict(f: FileRecord) -> dict:
         "date_source": f.date_source,
         "source_path": str(f.source_path),
         "thumbnail_token": f.thumbnail_token,
+        "blur_score": f.blur_score,
+        "is_blurry": f.blur_score is not None and f.blur_score < BLUR_THRESHOLD,
     }
 
 
@@ -192,13 +197,15 @@ def start_scan():
         "error": None,
     }
 
+    # Read session values before leaving request context
+    depth = session.get("scan_depth", 0)
+    max_depth = int(depth) if depth and int(depth) > 0 else None
+
     def run():
         try:
             def progress(n):
                 _scans[scan_id]["files_found"] = n
 
-            depth = session.get("scan_depth", 0)
-            max_depth = int(depth) if depth and int(depth) > 0 else None
             dated, undated = scan(source, dest, on_progress=progress, max_depth=max_depth)
             groups = group_by_date(dated)
             _scans[scan_id].update({
@@ -233,6 +240,16 @@ def get_scan(scan_id: str):
         response["groups"] = [_group_to_dict(g) for g in s["groups"]]
         response["undated_files"] = [_record_to_dict(f) for f in s["undated"]]
         response["group_count"] = len(s["groups"])
+        # Collect blurry files from all groups
+        blurry = []
+        for g in s["groups"]:
+            for f in g.files:
+                if f.blur_score is not None and f.blur_score < BLUR_THRESHOLD:
+                    d = _record_to_dict(f)
+                    d["group_id"] = g.group_id
+                    d["group_date"] = g.date.isoformat()
+                    blurry.append(d)
+        response["blurry_files"] = blurry
 
     return jsonify(response)
 
@@ -257,7 +274,8 @@ def get_thumbnail(scan_id: str, group_id: str):
         log.debug("THUMB group: extract_thumbnail returned None for %s", group.sample_image_path)
         return "", 404
 
-    return Response(data, mimetype="image/jpeg")
+    return Response(data, mimetype="image/jpeg",
+                    headers={"Cache-Control": "private, max-age=3600"})
 
 
 @bp.get("/thumbnail/<scan_id>/file/<token>")
@@ -274,7 +292,8 @@ def get_file_thumbnail(scan_id: str, token: str):
     if data is None:
         return "", 404
 
-    return Response(data, mimetype="image/jpeg")
+    return Response(data, mimetype="image/jpeg",
+                    headers={"Cache-Control": "private, max-age=3600"})
 
 
 @bp.get("/preview/<scan_id>/<token>")
@@ -367,8 +386,9 @@ def post_confirm():
     data = request.get_json(force=True)
     scan_id = data.get("scan_id")
     operation = data.get("operation", session.get("operation", "copy"))
-    group_updates = data.get("groups", [])      # [{group_id, description, skip}]
-    undated_assignments = data.get("undated_assignments", [])  # [{filename, assigned_date, group_id}]
+    group_updates = data.get("groups", [])
+    undated_assignments = data.get("undated_assignments", [])
+    blur_skip_tokens = set(data.get("blur_skip_tokens", []))  # tokens to exclude
 
     s = _scans.get(scan_id)
     if s is None or s["status"] != "complete":
@@ -385,6 +405,9 @@ def post_confirm():
         if g:
             g.description = upd.get("description", g.description)
             g.skip = upd.get("skip", g.skip)
+            # end_date is set when groups are combined in the UI
+            end_date_str = upd.get("end_date")
+            g.end_date = date.fromisoformat(end_date_str) if end_date_str else None
 
     # Handle undated file assignments
     undated_by_name = {f.filename: f for f in s["undated"]}
@@ -422,9 +445,11 @@ def post_confirm():
     for g in s["groups"]:
         if g.skip:
             continue
-        dest_dir = build_folder_path(dest_root, g.date, g.description, date_format)
+        end_date = getattr(g, "end_date", None)
+        dest_dir = build_folder_path(dest_root, g.date, g.description, date_format, end_date)
         for f in g.files:
-            file_moves.append((f.source_path, dest_dir))
+            if f.thumbnail_token not in blur_skip_tokens:
+                file_moves.append((f.source_path, dest_dir))
 
     conflicts = preflight_check(file_moves)
     conflict_list = [{"source": str(s), "dest_dir": str(d)} for s, d in conflicts]
@@ -531,7 +556,8 @@ def post_watcher_start():
         except Exception as e:
             return jsonify({"error": f"Cannot create destination: {e}"}), 400
 
-    status = start_watcher(watch_path, dest_path, operation, date_format)
+    recursive = bool(data.get("recursive", False))
+    status = start_watcher(watch_path, dest_path, operation, date_format, recursive=recursive)
     return jsonify(status)
 
 
