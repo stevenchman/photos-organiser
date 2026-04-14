@@ -72,13 +72,14 @@ const API = {
     return _get("/api/watcher/status");
   },
 
-  async watcherStart(watchPath, destPath, operation, dateFormat, recursive = false) {
+  async watcherStart(watchPath, destPath, operation, dateFormat, recursive = false, monthFolders = false) {
     return _post("/api/watcher/start", {
       watch_path: watchPath,
       dest_path: destPath,
       operation,
       date_format: dateFormat,
       recursive,
+      month_folders: monthFolders,
     });
   },
 

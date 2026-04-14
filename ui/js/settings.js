@@ -35,7 +35,10 @@ const Settings = (() => {
 
   function _updateDateFormatPreview() {
     const el = document.getElementById("date-format-preview");
-    if (el) el.textContent = "e.g. -2026/" + (_DATE_FORMAT_EXAMPLES[_dateFormat] || "");
+    if (!el) return;
+    const monthFolders = document.getElementById("month-folders")?.checked;
+    const monthPart = monthFolders ? (_dateFormat.startsWith("yyyy") ? "2026-02/" : "26-02/") : "";
+    el.textContent = "e.g. -2026/" + monthPart + (_DATE_FORMAT_EXAMPLES[_dateFormat] || "");
   }
 
   // ── History helpers ────────────────────────────────────────────────────────
@@ -156,6 +159,9 @@ const Settings = (() => {
       _dateFormat = s.date_format || "yymmdd";
       _setDateFormat(_dateFormat);
 
+      const monthFoldersEl = document.getElementById("month-folders");
+      if (monthFoldersEl) monthFoldersEl.checked = !!s.month_folders;
+
       // scan_depth 0 = unlimited (subfolders on), 1 = top-level only (off)
       const subfoldersEl = document.getElementById("scan-subfolders");
       if (subfoldersEl) subfoldersEl.checked = (s.scan_depth === 0 || !s.scan_depth);
@@ -189,6 +195,9 @@ const Settings = (() => {
     document.querySelectorAll("#date-format-group button").forEach(btn => {
       btn.addEventListener("click", () => _setDateFormat(btn.dataset.fmt));
     });
+
+    // Month folders checkbox — update preview on change
+    document.getElementById("month-folders")?.addEventListener("change", _updateDateFormatPreview);
 
     // Folder picker buttons
     document.getElementById("browse-source").addEventListener("click", () => _openPicker("source"));
@@ -273,18 +282,20 @@ const Settings = (() => {
     const apiKey      = document.getElementById("api-key-input").value.trim();
     const mode        = _getMode();
     const op          = _getOperation();
-    const subfolders  = document.getElementById("scan-subfolders")?.checked !== false;
-    const scanDepth   = subfolders ? 0 : 1;
+    const subfolders   = document.getElementById("scan-subfolders")?.checked !== false;
+    const scanDepth    = subfolders ? 0 : 1;
+    const monthFolders = document.getElementById("month-folders")?.checked || false;
 
     try {
       await API.saveSettings({
-        source_path: source,
-        dest_path:   dest,
-        operation:   op,
+        source_path:   source,
+        dest_path:     dest,
+        operation:     op,
         mode,
-        date_format: _dateFormat,
-        scan_depth:  scanDepth,
-        api_key:     apiKey,
+        date_format:   _dateFormat,
+        month_folders: monthFolders,
+        scan_depth:    scanDepth,
+        api_key:       apiKey,
       });
       _saveToHistory("source-path", source);
       _saveToHistory("dest-path",   dest);
@@ -338,9 +349,10 @@ const Settings = (() => {
     _saveToHistory("watch-path",      watchPath);
     _saveToHistory("watch-dest-path", destPath);
 
-    const recursive = document.getElementById("watch-subfolders")?.checked || false;
+    const recursive    = document.getElementById("watch-subfolders")?.checked || false;
+    const monthFolders = document.getElementById("month-folders")?.checked || false;
     try {
-      await API.watcherStart(watchPath, destPath, _watchOp, _dateFormat, recursive);
+      await API.watcherStart(watchPath, destPath, _watchOp, _dateFormat, recursive, monthFolders);
       _updateWatcherUI(await API.watcherStatus());
       _startWatcherPoll();
     } catch (e) {

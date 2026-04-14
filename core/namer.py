@@ -6,6 +6,9 @@ Supported date_format values:
     "yyyymmdd"  →  "20260214"     (full year compact)
     "yy-mm-dd"  →  "26-02-14"     (compact with dashes)
     "yyyy-mm-dd" → "2026-02-14"   (ISO with dashes)
+
+With month_folders=True an extra YY-MM level is inserted:
+    dest/-2026/26-02/260214 Snowdon hike
 """
 
 from datetime import date
@@ -27,26 +30,32 @@ def build_bare_name(d: date, date_format: str = DEFAULT_DATE_FORMAT) -> str:
     return fmt(d)
 
 
+def _month_folder_name(d: date, date_format: str) -> str:
+    """Return the month subfolder name, e.g. '26-04' or '2026-04'."""
+    if date_format.startswith("yyyy"):
+        return d.strftime("%Y-%m")
+    return d.strftime("%y-%m")
+
+
 def build_folder_path(
     dest_root: Path,
     d: date,
     description: str,
     date_format: str = DEFAULT_DATE_FORMAT,
     end_date: date | None = None,
+    month_folders: bool = False,
 ) -> Path:
     """
     Return the full target folder path.
 
+    Without month_folders (default):
+        dest/-2026/260214 Snowdon hike
+
+    With month_folders=True:
+        dest/-2026/26-02/260214 Snowdon hike
+
     For combined groups spanning multiple days, pass end_date to get a range:
         260402-260410 Snowdon trip
-
-    Example:
-        dest_root = Path("E:/Library")
-        d = date(2026, 2, 14)
-        description = "Snowdon hike"
-
-    Returns:
-        Path("E:/Library/-2026/260214 Snowdon hike")
     """
     year_folder = f"-{d.year}"
     day_folder = build_bare_name(d, date_format)
@@ -57,4 +66,6 @@ def build_folder_path(
     if description.strip():
         day_folder = f"{day_folder} {description.strip()}"
 
+    if month_folders:
+        return dest_root / year_folder / _month_folder_name(d, date_format) / day_folder
     return dest_root / year_folder / day_folder

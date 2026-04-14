@@ -32,6 +32,7 @@ class _Watcher:
         date_format: str,
         interval: int = 3,
         recursive: bool = False,
+        month_folders: bool = False,
     ):
         self.watch_path = watch_path
         self.dest_path = dest_path
@@ -39,6 +40,7 @@ class _Watcher:
         self.date_format = date_format
         self.interval = interval
         self.recursive = recursive
+        self.month_folders = month_folders
 
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
@@ -149,7 +151,7 @@ class _Watcher:
             if date_taken is None:
                 date_taken = date.today()
                 date_source = "watcher_default"
-            dest_dir = build_folder_path(self.dest_path, date_taken, "", self.date_format)
+            dest_dir = build_folder_path(self.dest_path, date_taken, "", self.date_format, month_folders=self.month_folders)
             file_moves.append((path, dest_dir))
 
         # Log what we're about to process
@@ -187,6 +189,7 @@ def start_watcher(
     date_format: str = "yymmdd",
     interval: int = 3,
     recursive: bool = False,
+    month_folders: bool = False,
 ) -> dict:
     global _watcher
     with _watcher_lock:
@@ -199,6 +202,7 @@ def start_watcher(
             date_format=date_format,
             interval=interval,
             recursive=recursive,
+            month_folders=month_folders,
         )
         _watcher.start()
         return _watcher.status()

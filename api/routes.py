@@ -105,6 +105,7 @@ def get_settings():
         "operation": session.get("operation", "copy"),
         "mode": session.get("mode", "exif"),
         "date_format": session.get("date_format", DEFAULT_DATE_FORMAT),
+        "month_folders": session.get("month_folders", False),
         "scan_depth": session.get("scan_depth", 0),
         "has_api_key": bool(session.get("api_key") or os.environ.get("ANTHROPIC_API_KEY")),
         "ffprobe_available": ffprobe_available(),
@@ -121,6 +122,8 @@ def post_settings():
     session["mode"] = data.get("mode", "exif")
     if data.get("date_format") in DATE_FORMATS:
         session["date_format"] = data["date_format"]
+    if "month_folders" in data:
+        session["month_folders"] = bool(data["month_folders"])
     if "scan_depth" in data:
         session["scan_depth"] = int(data.get("scan_depth", 0))
     if data.get("api_key"):
@@ -439,6 +442,7 @@ def post_confirm():
             group_by_id[new_group.group_id] = new_group
 
     date_format = session.get("date_format", DEFAULT_DATE_FORMAT)
+    month_folders = session.get("month_folders", False)
 
     # Build file_moves list for pre-flight check
     file_moves: list[tuple[Path, Path]] = []
@@ -446,7 +450,7 @@ def post_confirm():
         if g.skip:
             continue
         end_date = getattr(g, "end_date", None)
-        dest_dir = build_folder_path(dest_root, g.date, g.description, date_format, end_date)
+        dest_dir = build_folder_path(dest_root, g.date, g.description, date_format, end_date, month_folders)
         for f in g.files:
             if f.thumbnail_token not in blur_skip_tokens:
                 file_moves.append((f.source_path, dest_dir))
@@ -557,7 +561,8 @@ def post_watcher_start():
             return jsonify({"error": f"Cannot create destination: {e}"}), 400
 
     recursive = bool(data.get("recursive", False))
-    status = start_watcher(watch_path, dest_path, operation, date_format, recursive=recursive)
+    month_folders = bool(data.get("month_folders", session.get("month_folders", False)))
+    status = start_watcher(watch_path, dest_path, operation, date_format, recursive=recursive, month_folders=month_folders)
     return jsonify(status)
 
 
