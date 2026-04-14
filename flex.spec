@@ -42,8 +42,6 @@ a = Analysis(
         'unittest', 'pydoc', 'doctest',
         'xmlrpc', 'ftplib', 'imaplib', 'smtplib', 'poplib',
         'curses', 'readline',
-        'multiprocessing',
-        'concurrent.futures',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
