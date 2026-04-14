@@ -400,6 +400,8 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 }
 .card:hover { border-color: var(--border2, #202640); }
 .card.selected-for-combine { border-color: var(--amber, #FF8C00); box-shadow: 0 0 0 2px var(--amber-glow, rgba(255,140,0,0.12)); }
+.combine-active .card,
+.combine-active .gallery-card { cursor: pointer; }
 
 .card-header {
   display: flex;

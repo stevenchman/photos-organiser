@@ -356,10 +356,12 @@ const Preview = (() => {
     _combineMode = true;
     _selectedForCombine.clear();
     document.getElementById("combine-toolbar").classList.add("visible");
+    document.getElementById("groups-container")?.classList.add("combine-active");
     document.querySelectorAll(".combine-checkbox").forEach(cb => { cb.style.display = ""; });
     _updateCombineCount();
-    document.querySelectorAll(".combine-checkbox").forEach(cb => {
-      cb.addEventListener("change", _onCombineCheckChange);
+    // Make whole cards clickable — use named function so removeEventListener works
+    document.querySelectorAll("[data-group-id]").forEach(card => {
+      card.addEventListener("click", _onCardCombineClick);
     });
   }
 
@@ -367,22 +369,33 @@ const Preview = (() => {
     _combineMode = false;
     _selectedForCombine.clear();
     document.getElementById("combine-toolbar").classList.remove("visible");
+    document.getElementById("groups-container")?.classList.remove("combine-active");
     document.querySelectorAll(".combine-checkbox").forEach(cb => {
       cb.style.display = "none";
       cb.checked = false;
     });
-    document.querySelectorAll(".card.selected-for-combine").forEach(c => c.classList.remove("selected-for-combine"));
+    document.querySelectorAll(".selected-for-combine").forEach(c => c.classList.remove("selected-for-combine"));
+    document.querySelectorAll("[data-group-id]").forEach(card => {
+      card.removeEventListener("click", _onCardCombineClick);
+    });
   }
 
-  function _onCombineCheckChange(e) {
-    const groupId = e.target.dataset.groupId;
-    const card    = document.querySelector(`[data-group-id="${groupId}"]`);
-    if (e.target.checked) {
+  function _onCardCombineClick(e) {
+    if (!_combineMode) return;
+    // Let interactive elements (inputs, buttons, labels) handle their own clicks
+    if (e.target.closest("input, button, a, label")) return;
+    const groupId = this.dataset.groupId;
+    if (!groupId) return;
+    const cb = this.querySelector(".combine-checkbox");
+    const nowSelected = !_selectedForCombine.has(groupId);
+    if (nowSelected) {
       _selectedForCombine.add(groupId);
-      card?.classList.add("selected-for-combine");
+      this.classList.add("selected-for-combine");
+      if (cb) cb.checked = true;
     } else {
       _selectedForCombine.delete(groupId);
-      card?.classList.remove("selected-for-combine");
+      this.classList.remove("selected-for-combine");
+      if (cb) cb.checked = false;
     }
     _updateCombineCount();
   }
