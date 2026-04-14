@@ -547,10 +547,11 @@ const Preview = (() => {
   function collectGroups() {
     if (!_scanData) return [];
     return _scanData.groups.map(g => ({
-      group_id:    g.group_id,
-      description: document.getElementById(`desc-${g.group_id}`)?.value.trim() || "",
-      skip:        document.getElementById(`skip-${g.group_id}`)?.checked || false,
-      end_date:    g.end_date || null,
+      group_id:         g.group_id,
+      description:      document.getElementById(`desc-${g.group_id}`)?.value.trim() || "",
+      skip:             document.getElementById(`skip-${g.group_id}`)?.checked || false,
+      end_date:         g.end_date || null,
+      merged_group_ids: g._merged_from ? g._merged_from.map(m => m.group_id) : null,
     }));
   }
 

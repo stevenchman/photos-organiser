@@ -403,14 +403,30 @@ def post_confirm():
 
     # Apply group updates
     group_by_id = {g.group_id: g for g in s["groups"]}
+    merged_into: set[str] = set()  # group_ids that have been absorbed into another group
+
     for upd in group_updates:
         g = group_by_id.get(upd["group_id"])
-        if g:
-            g.description = upd.get("description", g.description)
-            g.skip = upd.get("skip", g.skip)
-            # end_date is set when groups are combined in the UI
-            end_date_str = upd.get("end_date")
-            g.end_date = date.fromisoformat(end_date_str) if end_date_str else None
+        if g is None:
+            continue
+        g.description = upd.get("description", g.description)
+        g.skip = upd.get("skip", g.skip)
+        # end_date is set when groups are combined in the UI
+        end_date_str = upd.get("end_date")
+        g.end_date = date.fromisoformat(end_date_str) if end_date_str else None
+        # Absorb merged groups' files into this group
+        merged_ids = upd.get("merged_group_ids") or []
+        for mid in merged_ids:
+            src = group_by_id.get(mid)
+            if src:
+                g.files.extend(src.files)
+                merged_into.add(mid)
+
+    # Mark absorbed groups as skip so they don't produce their own folders
+    for gid in merged_into:
+        src = group_by_id.get(gid)
+        if src:
+            src.skip = True
 
     # Handle undated file assignments
     undated_by_name = {f.filename: f for f in s["undated"]}
