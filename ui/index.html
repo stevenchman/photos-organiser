@@ -233,6 +233,7 @@
         <div class="spinner"></div>
         <p id="scan-status-text" class="scan-status-text">Scanning…</p>
         <p style="font-size:0.78rem;color:var(--text-muted)">Large folders may take a moment.</p>
+        <button class="btn-secondary" id="cancel-scan-btn" style="margin-top:16px">Cancel</button>
       </div>
     </div><!-- /scanning -->
 
@@ -312,7 +313,10 @@
     <div id="view-done" class="view">
       <div class="done-icon">✅</div>
       <h2 style="text-align:center;margin-bottom:8px">Done!</h2>
-      <p id="done-summary-text" style="text-align:center;margin-bottom:28px"></p>
+      <p id="done-summary-text" style="text-align:center;margin-bottom:16px"></p>
+      <div style="text-align:center;margin-bottom:28px">
+        <button class="btn-primary" id="restart-btn-top">Organise more files →</button>
+      </div>
       <table class="summary-table">
         <thead>
           <tr><th>Status</th><th>File</th><th>Destination</th><th>Error</th></tr>
@@ -346,9 +350,11 @@
     <div class="lightbox-controls">
       <button id="lightbox-rotate-ccw" class="lightbox-btn" title="Rotate left">↺</button>
       <button id="lightbox-rotate-cw"  class="lightbox-btn" title="Rotate right">↻</button>
-      <button id="lightbox-close"      class="lightbox-btn" title="Close">✕</button>
+      <button id="lightbox-close"      class="lightbox-btn" title="Close (Esc)">✕</button>
     </div>
   </div>
+  <button id="lightbox-prev" class="lightbox-nav-btn lightbox-prev" title="Previous (←)">&#8249;</button>
+  <button id="lightbox-next" class="lightbox-nav-btn lightbox-next" title="Next (→)">&#8250;</button>
   <div id="lightbox-spinner" class="lightbox-spinner">
     <div class="spinner"></div>
   </div>

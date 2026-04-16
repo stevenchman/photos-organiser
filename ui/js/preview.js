@@ -253,6 +253,7 @@ const Preview = (() => {
   // ── Lightbox openers ───────────────────────────────────────────────────────
 
   function openGroupLightbox(scanId, groupId, token, fileType, filename) {
+    if (_combineMode) return; // selecting for combine — don't open lightbox
     const group = _scanData?.groups.find(g => g.group_id === groupId);
     const filmstrip = (group?.files || []).map(f => ({
       token: f.thumbnail_token,
@@ -263,6 +264,7 @@ const Preview = (() => {
   }
 
   function openFileLightbox(scanId, groupId, fileIndex, filename) {
+    if (_combineMode) return;
     const group = _scanData?.groups.find(g => g.group_id === groupId);
     if (!group) return;
     const file = group.files[fileIndex];

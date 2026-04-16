@@ -839,6 +839,31 @@ input[type="checkbox"] { accent-color: var(--amber, #FF8C00); width: 15px; heigh
 .lightbox-btn:hover { background: rgba(255,255,255,0.20); }
 #lightbox-close.lightbox-btn:hover { background: rgba(192,57,43,0.8); }
 
+.lightbox-nav-btn {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 52px;
+  height: 52px;
+  background: rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 50%;
+  color: #fff;
+  font-size: 2rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 320;
+  transition: background 0.15s, opacity 0.15s;
+  user-select: none;
+}
+.lightbox-nav-btn:hover { background: rgba(255,255,255,0.25); }
+.lightbox-nav-btn:disabled { opacity: 0.15; cursor: default; pointer-events: none; }
+.lightbox-prev { left: 16px; }
+.lightbox-next { right: 16px; }
+
 .lightbox-spinner {
   position: absolute;
   display: flex;

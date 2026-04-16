@@ -11,6 +11,7 @@ const App = (() => {
     mode: "exif",
     operation: "copy",
   };
+  let _scanPollInterval = null;
 
   function init() {
     _initElectronTitlebar();
@@ -19,7 +20,16 @@ const App = (() => {
     document.getElementById("back-to-settings").addEventListener("click", () => _showView("settings"));
     document.getElementById("confirm-btn").addEventListener("click", _onConfirm);
     document.getElementById("suggest-all-btn").addEventListener("click", _onSuggestAll);
-    document.getElementById("restart-btn").addEventListener("click", () => {
+
+    const _restart = () => {
+      state = { view: "settings", scanId: null, scanData: null, mode: "exif", operation: "copy" };
+      _showView("settings");
+    };
+    document.getElementById("restart-btn").addEventListener("click", _restart);
+    document.getElementById("restart-btn-top").addEventListener("click", _restart);
+
+    document.getElementById("cancel-scan-btn").addEventListener("click", () => {
+      if (_scanPollInterval) { clearInterval(_scanPollInterval); _scanPollInterval = null; }
       state = { view: "settings", scanId: null, scanData: null, mode: "exif", operation: "copy" };
       _showView("settings");
     });
@@ -71,21 +81,21 @@ const App = (() => {
   }
 
   function _pollScan() {
-    const interval = setInterval(async () => {
+    _scanPollInterval = setInterval(async () => {
       try {
         const data = await API.getScan(state.scanId);
         document.getElementById("scan-status-text").textContent = `Found ${data.files_found} files…`;
 
         if (data.status === "complete") {
-          clearInterval(interval);
+          clearInterval(_scanPollInterval); _scanPollInterval = null;
           state.scanData = data;
           _showPreview(data);
         } else if (data.status === "error") {
-          clearInterval(interval);
+          clearInterval(_scanPollInterval); _scanPollInterval = null;
           document.getElementById("scan-status-text").textContent = "Scan error: " + (data.error || "Unknown error");
         }
       } catch (e) {
-        clearInterval(interval);
+        clearInterval(_scanPollInterval); _scanPollInterval = null;
         document.getElementById("scan-status-text").textContent = "Poll error: " + e.message;
       }
     }, 1000);

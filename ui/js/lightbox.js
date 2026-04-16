@@ -9,7 +9,7 @@
 const Lightbox = (() => {
   const VIDEO_TYPES = new Set(["mp4", "insv", "insp", "360"]);
 
-  let _overlay, _img, _video, _caption, _spinner, _filmstrip;
+  let _overlay, _img, _video, _caption, _spinner, _filmstrip, _prevBtn, _nextBtn;
   let _rotation = 0;
   let _currentScanId = null;
   let _currentToken = null;
@@ -23,10 +23,14 @@ const Lightbox = (() => {
     _caption   = document.getElementById("lightbox-caption");
     _spinner   = document.getElementById("lightbox-spinner");
     _filmstrip = document.getElementById("lightbox-filmstrip");
+    _prevBtn   = document.getElementById("lightbox-prev");
+    _nextBtn   = document.getElementById("lightbox-next");
 
     document.getElementById("lightbox-close").addEventListener("click", close);
     document.getElementById("lightbox-rotate-ccw").addEventListener("click", () => _rotate(-90));
     document.getElementById("lightbox-rotate-cw").addEventListener("click",  () => _rotate(90));
+    _prevBtn.addEventListener("click", () => _navigateFilmstrip(-1));
+    _nextBtn.addEventListener("click", () => _navigateFilmstrip(1));
 
     _overlay.addEventListener("click", e => {
       if (e.target === _overlay) close();
@@ -59,6 +63,7 @@ const Lightbox = (() => {
     _overlay.classList.add("open");
 
     _buildFilmstrip(scanId, token);
+    _updateNavButtons();
 
     if (VIDEO_TYPES.has(fileType)) {
       _openVideo(scanId, token);
@@ -158,6 +163,8 @@ const Lightbox = (() => {
       el.classList.toggle("active", el.dataset.token === f.token);
     });
 
+    _updateNavButtons();
+
     if (VIDEO_TYPES.has(f.file_type)) {
       _openVideo(_currentScanId, f.token);
     } else {
@@ -173,6 +180,16 @@ const Lightbox = (() => {
     if (next) _jumpTo(next);
   }
 
+  function _updateNavButtons() {
+    if (!_prevBtn || !_nextBtn) return;
+    const idx = _filmstripFiles.findIndex(f => f.token === _currentToken);
+    const hasFilmstrip = _filmstripFiles.length > 1;
+    _prevBtn.style.display = hasFilmstrip ? "flex" : "none";
+    _nextBtn.style.display = hasFilmstrip ? "flex" : "none";
+    _prevBtn.disabled = idx <= 0;
+    _nextBtn.disabled = idx >= _filmstripFiles.length - 1;
+  }
+
   function close() {
     if (!_overlay) return;
     _overlay.classList.remove("open");
@@ -181,6 +198,8 @@ const Lightbox = (() => {
     _img.src = "";
     _filmstripFiles = [];
     _preloadCache.clear();
+    if (_prevBtn) _prevBtn.style.display = "none";
+    if (_nextBtn) _nextBtn.style.display = "none";
   }
 
   return { open, close };
