@@ -65,7 +65,7 @@
       <h1>Photos Organiser</h1>
     </div>
     <div class="header-actions">
-      <button class="btn-icon" id="appearance-btn" title="Appearance">🎨</button>
+      <button class="btn-icon" id="appearance-btn" title="Appearance">⚙</button>
     </div>
   </header>
 
@@ -143,6 +143,13 @@
       <div class="field" style="display:flex;align-items:center;gap:10px">
         <input type="checkbox" id="scan-subfolders" checked>
         <label for="scan-subfolders" style="margin:0;color:var(--text-mid);font-size:0.88rem;cursor:pointer">Scan subfolders</label>
+      </div>
+
+      <div class="field" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <label for="blur-threshold" style="margin:0;color:var(--text-mid);font-size:0.88rem">Blur detection threshold</label>
+        <input type="number" id="blur-threshold" min="0" max="500" step="5" value="80"
+               style="width:68px;padding:4px 8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-btn);color:var(--text);font-size:0.88rem">
+        <span style="font-size:0.78rem;color:var(--text-muted)">Higher = stricter (default 80)</span>
       </div>
 
       <div id="ai-key-section" style="display:none">
@@ -270,11 +277,11 @@
       <div id="preview-alert" class="alert" style="display:none"></div>
       <div id="groups-container"></div>
 
-      <!-- Blurry photos -->
+      <!-- Quality issues -->
       <div id="blurry-section" class="blurry-section" style="display:none">
-        <h3>⚠ Blurry photos detected</h3>
+        <h3>⚠ Quality issues detected</h3>
         <p style="font-size:0.83rem;color:var(--text-muted);margin-bottom:14px">
-          These photos scored below the sharpness threshold. Uncheck any you'd like to discard — checked photos will still be organised normally.
+          These photos have quality issues (blurry, overexposed, or underexposed). Uncheck any you'd like to exclude — checked photos will still be organised normally.
         </p>
         <div id="blurry-files-container"></div>
       </div>
@@ -355,6 +362,10 @@
   </div>
   <button id="lightbox-prev" class="lightbox-nav-btn lightbox-prev" title="Previous (←)">&#8249;</button>
   <button id="lightbox-next" class="lightbox-nav-btn lightbox-next" title="Next (→)">&#8250;</button>
+  <label class="lightbox-skip-control" title="Skip this file (Ctrl+D)">
+    <input type="checkbox" id="lightbox-skip-cb" style="accent-color:var(--amber,#FF8C00)">
+    Skip this file
+  </label>
   <div id="lightbox-spinner" class="lightbox-spinner">
     <div class="spinner"></div>
   </div>

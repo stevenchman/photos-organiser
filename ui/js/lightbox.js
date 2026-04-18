@@ -9,12 +9,13 @@
 const Lightbox = (() => {
   const VIDEO_TYPES = new Set(["mp4", "insv", "insp", "360"]);
 
-  let _overlay, _img, _video, _caption, _spinner, _filmstrip, _prevBtn, _nextBtn;
+  let _overlay, _img, _video, _caption, _spinner, _filmstrip, _prevBtn, _nextBtn, _skipCb;
   let _rotation = 0;
   let _currentScanId = null;
   let _currentToken = null;
   let _filmstripFiles = [];
   const _preloadCache = new Set(); // tokens already kicked off for preload
+  let _fileSkips = null; // shared Set reference, set via setFileSkips()
 
   function _init() {
     _overlay   = document.getElementById("lightbox-overlay");
@@ -25,15 +26,18 @@ const Lightbox = (() => {
     _filmstrip = document.getElementById("lightbox-filmstrip");
     _prevBtn   = document.getElementById("lightbox-prev");
     _nextBtn   = document.getElementById("lightbox-next");
+    _skipCb    = document.getElementById("lightbox-skip-cb");
 
     document.getElementById("lightbox-close").addEventListener("click", close);
     document.getElementById("lightbox-rotate-ccw").addEventListener("click", () => _rotate(-90));
     document.getElementById("lightbox-rotate-cw").addEventListener("click",  () => _rotate(90));
     _prevBtn.addEventListener("click", () => _navigateFilmstrip(-1));
     _nextBtn.addEventListener("click", () => _navigateFilmstrip(1));
+    _skipCb?.addEventListener("change", () => _applySkip(_skipCb.checked));
 
     _overlay.addEventListener("click", e => {
-      if (e.target === _overlay) close();
+      // Close when clicking the overlay or the content area (not on image/video/controls)
+      if (e.target === _overlay || e.target.classList.contains("lightbox-content")) close();
     });
     document.addEventListener("keydown", e => {
       if (!_overlay?.classList.contains("open")) return;
@@ -41,6 +45,7 @@ const Lightbox = (() => {
       if (e.key === "ArrowRight")  _navigateFilmstrip(1);
       if (e.key === "ArrowLeft")   _navigateFilmstrip(-1);
       if (e.key === "ArrowUp" || e.key === "r") _rotate(90);
+      if (e.key === "d" && e.ctrlKey) { e.preventDefault(); _toggleSkip(); }
     });
   }
 
@@ -64,6 +69,7 @@ const Lightbox = (() => {
 
     _buildFilmstrip(scanId, token);
     _updateNavButtons();
+    _updateSkipControl(token);
 
     if (VIDEO_TYPES.has(fileType)) {
       _openVideo(scanId, token);
@@ -164,6 +170,7 @@ const Lightbox = (() => {
     });
 
     _updateNavButtons();
+    _updateSkipControl(f.token);
 
     if (VIDEO_TYPES.has(f.file_type)) {
       _openVideo(_currentScanId, f.token);
@@ -178,6 +185,27 @@ const Lightbox = (() => {
     if (idx === -1) return;
     const next = _filmstripFiles[idx + dir];
     if (next) _jumpTo(next);
+  }
+
+  function _toggleSkip() {
+    if (!_currentToken) return;
+    const nowSkipped = _fileSkips ? !_fileSkips.has(_currentToken) : false;
+    _applySkip(nowSkipped);
+  }
+
+  function _applySkip(skipped) {
+    if (!_currentToken) return;
+    if (_fileSkips) {
+      if (skipped) _fileSkips.add(_currentToken);
+      else _fileSkips.delete(_currentToken);
+    }
+    if (_skipCb) _skipCb.checked = skipped;
+    // Notify preview to refresh counts
+    if (typeof Preview !== "undefined") Preview.onFileSkipChanged();
+  }
+
+  function _updateSkipControl(token) {
+    if (_skipCb) _skipCb.checked = !!(_fileSkips?.has(token));
   }
 
   function _updateNavButtons() {
@@ -202,5 +230,9 @@ const Lightbox = (() => {
     if (_nextBtn) _nextBtn.style.display = "none";
   }
 
-  return { open, close };
+  function setFileSkips(skipsSet) {
+    _fileSkips = skipsSet;
+  }
+
+  return { open, close, setFileSkips };
 })();

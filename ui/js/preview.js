@@ -9,12 +9,17 @@ const Preview = (() => {
   let _galleryMode = localStorage.getItem("ph-view-mode") === "gallery";
   let _galleryScale = parseInt(localStorage.getItem("ph-gallery-scale") || "200", 10);
 
+  // File-level skips toggled via lightbox (shared with Lightbox via reference)
+  const _fileSkips = new Set();
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   function render(scanData) {
     _scanData = scanData;
     _combineMode = false;
     _selectedForCombine.clear();
+    _fileSkips.clear();
+    Lightbox.setFileSkips(_fileSkips);
 
     const container = document.getElementById("groups-container");
     container.innerHTML = "";
@@ -89,7 +94,7 @@ const Preview = (() => {
         ${thumbHtml}
         <div class="card-meta">
           <div class="date-label">${dateLabel}</div>
-          <div class="file-count">${group.file_count} ${fileWord}</div>
+          <div class="file-count" id="file-count-${group.group_id}">${group.file_count} ${fileWord}</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           ${group._merged_from ? `
@@ -159,7 +164,7 @@ const Preview = (() => {
     card.innerHTML = `
       <div class="gallery-thumb-wrap">
         ${thumbHtml}
-        <div class="gallery-overlay-count">${group.file_count}</div>
+        <div class="gallery-overlay-count" id="file-count-${group.group_id}">${group.file_count}</div>
         ${group._merged_from ? `<div class="gallery-overlay-combined">Combined</div>` : ""}
         <input type="checkbox" class="combine-checkbox gallery-combine-cb" data-group-id="${group.group_id}"
                style="display:none;position:absolute;top:6px;left:6px;accent-color:var(--amber);width:16px;height:16px" title="Select for combine">
@@ -283,12 +288,18 @@ const Preview = (() => {
     const container = document.getElementById("blurry-files-container");
     container.innerHTML = "";
     for (const f of files) {
-      const score = f.blur_score ?? 0;
-      const pct   = Math.min(100, Math.round((score / 80) * 100)); // 80 = threshold
-      let level, levelClass;
-      if (score < 20)       { level = "Very blurry";     levelClass = "badge-danger"; }
-      else if (score < 50)  { level = "Quite blurry";    levelClass = "badge-warn"; }
-      else                  { level = "Slightly blurry"; levelClass = "badge-amber"; }
+      const badges = [];
+
+      if (f.is_blurry) {
+        const score = f.blur_score ?? 0;
+        let level, levelClass;
+        if (score < 20)      { level = "Very blurry";     levelClass = "badge-danger"; }
+        else if (score < 50) { level = "Quite blurry";    levelClass = "badge-warn"; }
+        else                 { level = "Slightly blurry"; levelClass = "badge-amber"; }
+        badges.push(`<span class="badge ${levelClass}">${level}</span>`);
+      }
+      if (f.exposure_issue === "overexposed")  badges.push(`<span class="badge badge-warn">Overexposed</span>`);
+      if (f.exposure_issue === "underexposed") badges.push(`<span class="badge badge-warn">Underexposed</span>`);
 
       const row = document.createElement("div");
       row.className = "blurry-row";
@@ -303,10 +314,7 @@ const Preview = (() => {
              onerror="this.style.display='none'">
         <div class="blurry-info">
           <span class="blurry-name">${_esc(f.filename)}</span>
-          <span class="badge ${levelClass}">${level}</span>
-          <div class="blur-meter-track">
-            <div class="blur-meter-fill" style="width:${pct}%"></div>
-          </div>
+          ${badges.join("")}
         </div>
       `;
       container.appendChild(row);
@@ -314,11 +322,35 @@ const Preview = (() => {
   }
 
   function collectBlurSkips() {
-    const skipped = [];
+    const skipped = [..._fileSkips]; // from lightbox skip
     document.querySelectorAll(".blurry-keep-cb").forEach(cb => {
       if (!cb.checked) skipped.push(cb.dataset.token);
     });
-    return skipped;
+    return [...new Set(skipped)];
+  }
+
+  function onFileSkipChanged() {
+    _updateGroupFileCounts();
+  }
+
+  function _updateGroupFileCounts() {
+    if (!_scanData) return;
+    for (const g of _scanData.groups) {
+      const skipped = g.files.filter(f => _fileSkips.has(f.thumbnail_token)).length;
+      const el = document.getElementById(`file-count-${g.group_id}`);
+      if (!el) continue;
+      const total = g.file_count;
+      const active = total - skipped;
+      if (skipped > 0) {
+        el.textContent = `${active}/${total}`;
+        el.style.color = "var(--amber, #FF8C00)";
+      } else {
+        // gallery overlay just shows number; list card shows "N files"
+        const isGallery = el.classList.contains("gallery-overlay-count");
+        el.textContent = isGallery ? String(total) : `${total} ${total === 1 ? "file" : "files"}`;
+        el.style.color = "";
+      }
+    }
   }
 
   // ── Undated files ──────────────────────────────────────────────────────────
@@ -600,5 +632,6 @@ const Preview = (() => {
     collectGroups, collectUndatedAssignments, collectBlurSkips,
     useFileMtime,
     uncombineGroup,
+    onFileSkipChanged,
   };
 })();

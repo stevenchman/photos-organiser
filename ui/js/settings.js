@@ -162,6 +162,9 @@ const Settings = (() => {
       const monthFoldersEl = document.getElementById("month-folders");
       if (monthFoldersEl) monthFoldersEl.checked = !!s.month_folders;
 
+      const blurThreshEl = document.getElementById("blur-threshold");
+      if (blurThreshEl && s.blur_threshold != null) blurThreshEl.value = s.blur_threshold;
+
       // scan_depth 0 = unlimited (subfolders on), 1 = top-level only (off)
       const subfoldersEl = document.getElementById("scan-subfolders");
       if (subfoldersEl) subfoldersEl.checked = (s.scan_depth === 0 || !s.scan_depth);
@@ -284,18 +287,20 @@ const Settings = (() => {
     const op          = _getOperation();
     const subfolders   = document.getElementById("scan-subfolders")?.checked !== false;
     const scanDepth    = subfolders ? 0 : 1;
-    const monthFolders = document.getElementById("month-folders")?.checked || false;
+    const monthFolders   = document.getElementById("month-folders")?.checked || false;
+    const blurThreshold  = parseFloat(document.getElementById("blur-threshold")?.value || "80");
 
     try {
       await API.saveSettings({
-        source_path:   source,
-        dest_path:     dest,
-        operation:     op,
+        source_path:    source,
+        dest_path:      dest,
+        operation:      op,
         mode,
-        date_format:   _dateFormat,
-        month_folders: monthFolders,
-        scan_depth:    scanDepth,
-        api_key:       apiKey,
+        date_format:    _dateFormat,
+        month_folders:  monthFolders,
+        blur_threshold: blurThreshold,
+        scan_depth:     scanDepth,
+        api_key:        apiKey,
       });
       _saveToHistory("source-path", source);
       _saveToHistory("dest-path",   dest);

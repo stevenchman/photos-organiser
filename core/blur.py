@@ -1,6 +1,6 @@
 """
-Blur detection via Laplacian variance.
-Lower score = blurrier. Uses only Pillow + numpy (no extra dependencies).
+Image quality detection: blur (Laplacian variance) and exposure (mean brightness).
+Uses only Pillow + numpy (no extra dependencies).
 """
 
 from __future__ import annotations
@@ -20,8 +20,12 @@ _LAPLACIAN = ImageFilter.Kernel(
     offset=128,
 )
 
-# Files below this score are considered blurry.
+# Default threshold — files below this score are considered blurry.
 BLUR_THRESHOLD = 80.0
+
+# Exposure thresholds (0–255 mean brightness of greyscale image)
+_OVEREXPOSED_MEAN  = 230
+_UNDEREXPOSED_MEAN = 25
 
 
 def compute_blur_score(path: Path, file_type: str) -> float | None:
@@ -40,6 +44,28 @@ def compute_blur_score(path: Path, file_type: str) -> float | None:
             lap = grey.filter(_LAPLACIAN)
             arr = np.array(lap, dtype=np.float32) - 128.0  # remove offset
             return float(arr.var())
+    except Exception:
+        return None
+
+
+def compute_exposure_issue(path: Path, file_type: str) -> str | None:
+    """
+    Returns 'overexposed', 'underexposed', or None.
+    Uses mean greyscale brightness on a small thumbnail for speed.
+    """
+    try:
+        img = _open_image(path, file_type)
+        if img is None:
+            return None
+        with img:
+            grey = img.convert("L")
+            grey.thumbnail((200, 200), Image.LANCZOS)
+            mean = float(np.array(grey, dtype=np.float32).mean())
+            if mean > _OVEREXPOSED_MEAN:
+                return "overexposed"
+            if mean < _UNDEREXPOSED_MEAN:
+                return "underexposed"
+            return None
     except Exception:
         return None
 

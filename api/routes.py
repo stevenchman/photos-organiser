@@ -54,7 +54,7 @@ def _find_file_by_token(s: dict, token: str) -> Path | None:
             return f.source_path
     return None
 
-def _group_to_dict(g: DayGroup) -> dict:
+def _group_to_dict(g: DayGroup, blur_threshold: float = BLUR_THRESHOLD) -> dict:
     files = []
     for f in g.files:
         files.append({
@@ -65,7 +65,8 @@ def _group_to_dict(g: DayGroup) -> dict:
             "source_path": str(f.source_path),
             "thumbnail_token": f.thumbnail_token,
             "blur_score": f.blur_score,
-            "is_blurry": f.blur_score is not None and f.blur_score < BLUR_THRESHOLD,
+            "is_blurry": f.blur_score is not None and f.blur_score < blur_threshold,
+            "exposure_issue": getattr(f, "exposure_issue", None),
         })
     return {
         "group_id": g.group_id,
@@ -82,7 +83,7 @@ def _group_to_dict(g: DayGroup) -> dict:
     }
 
 
-def _record_to_dict(f: FileRecord) -> dict:
+def _record_to_dict(f: FileRecord, blur_threshold: float = BLUR_THRESHOLD) -> dict:
     return {
         "filename": f.filename,
         "size_bytes": f.size_bytes,
@@ -91,7 +92,8 @@ def _record_to_dict(f: FileRecord) -> dict:
         "source_path": str(f.source_path),
         "thumbnail_token": f.thumbnail_token,
         "blur_score": f.blur_score,
-        "is_blurry": f.blur_score is not None and f.blur_score < BLUR_THRESHOLD,
+        "is_blurry": f.blur_score is not None and f.blur_score < blur_threshold,
+        "exposure_issue": getattr(f, "exposure_issue", None),
     }
 
 
@@ -107,6 +109,7 @@ def get_settings():
         "date_format": session.get("date_format", DEFAULT_DATE_FORMAT),
         "month_folders": session.get("month_folders", True),
         "scan_depth": session.get("scan_depth", 0),
+        "blur_threshold": session.get("blur_threshold", BLUR_THRESHOLD),
         "has_api_key": bool(session.get("api_key") or os.environ.get("ANTHROPIC_API_KEY")),
         "ffprobe_available": ffprobe_available(),
         "date_formats": list(DATE_FORMATS.keys()),
@@ -124,6 +127,11 @@ def post_settings():
         session["date_format"] = data["date_format"]
     if "month_folders" in data:
         session["month_folders"] = bool(data["month_folders"])
+    if "blur_threshold" in data:
+        try:
+            session["blur_threshold"] = float(data["blur_threshold"])
+        except (TypeError, ValueError):
+            pass
     if "scan_depth" in data:
         session["scan_depth"] = int(data.get("scan_depth", 0))
     if data.get("api_key"):
@@ -240,19 +248,22 @@ def get_scan(scan_id: str):
     }
 
     if s["status"] == "complete":
-        response["groups"] = [_group_to_dict(g) for g in s["groups"]]
-        response["undated_files"] = [_record_to_dict(f) for f in s["undated"]]
+        blur_threshold = session.get("blur_threshold", BLUR_THRESHOLD)
+        response["groups"] = [_group_to_dict(g, blur_threshold) for g in s["groups"]]
+        response["undated_files"] = [_record_to_dict(f, blur_threshold) for f in s["undated"]]
         response["group_count"] = len(s["groups"])
-        # Collect blurry files from all groups
-        blurry = []
+        # Collect quality issues (blurry + exposure) from all groups
+        quality_issues = []
         for g in s["groups"]:
             for f in g.files:
-                if f.blur_score is not None and f.blur_score < BLUR_THRESHOLD:
-                    d = _record_to_dict(f)
+                is_blurry = f.blur_score is not None and f.blur_score < blur_threshold
+                exposure = getattr(f, "exposure_issue", None)
+                if is_blurry or exposure:
+                    d = _record_to_dict(f, blur_threshold)
                     d["group_id"] = g.group_id
                     d["group_date"] = g.date.isoformat()
-                    blurry.append(d)
-        response["blurry_files"] = blurry
+                    quality_issues.append(d)
+        response["blurry_files"] = quality_issues  # key kept for compatibility
 
     return jsonify(response)
 

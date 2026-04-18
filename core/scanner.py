@@ -14,7 +14,7 @@ from typing import Callable
 
 from config import SUPPORTED_EXTENSIONS, VIDEO_EXTENSIONS
 from core.metadata import extract_date
-from core.blur import compute_blur_score
+from core.blur import compute_blur_score, compute_exposure_issue
 
 _IMAGE_TYPES = {"jpeg", "raw_raf", "dng"}
 
@@ -28,7 +28,8 @@ class FileRecord:
     date_source: str          # "exif" | "video_metadata" | "file_mtime"
     file_type: str            # e.g. "jpeg", "raw_raf", "mp4" …
     thumbnail_token: str      # SHA1 hex of source_path, used in thumbnail URL
-    blur_score: float | None = None  # Laplacian variance; None = video or unscored
+    blur_score: float | None = None       # Laplacian variance; None = video or unscored
+    exposure_issue: str | None = None     # "overexposed" | "underexposed" | None
 
 
 def _collect_paths(source: Path, dest: Path | None, max_depth: int | None) -> list[tuple[Path, str]]:
@@ -63,7 +64,8 @@ def _collect_paths(source: Path, dest: Path | None, max_depth: int | None) -> li
 def _build_record(path: Path, file_type: str) -> FileRecord:
     date_taken, date_source = extract_date(path)
     token = hashlib.sha1(str(path).encode()).hexdigest()
-    blur_score = compute_blur_score(path, file_type) if file_type in _IMAGE_TYPES else None
+    blur_score     = compute_blur_score(path, file_type)     if file_type in _IMAGE_TYPES else None
+    exposure_issue = compute_exposure_issue(path, file_type) if file_type in _IMAGE_TYPES else None
     return FileRecord(
         source_path=path,
         filename=path.name,
@@ -73,6 +75,7 @@ def _build_record(path: Path, file_type: str) -> FileRecord:
         file_type=file_type,
         thumbnail_token=token,
         blur_score=blur_score,
+        exposure_issue=exposure_issue,
     )
 
 
