@@ -164,7 +164,7 @@ const Preview = (() => {
     card.innerHTML = `
       <div class="gallery-thumb-wrap">
         ${thumbHtml}
-        <div class="gallery-overlay-count" id="file-count-${group.group_id}">${group.file_count} ${group.file_count === 1 ? "photo" : "photos"}</div>
+        <div class="gallery-overlay-count" id="file-count-${group.group_id}">${group.file_count}</div>
         ${group._merged_from ? `<div class="gallery-overlay-combined">Combined</div>` : ""}
         <input type="checkbox" class="combine-checkbox gallery-combine-cb" data-group-id="${group.group_id}"
                style="display:none;position:absolute;top:6px;left:6px;accent-color:var(--amber);width:16px;height:16px" title="Select for combine">
@@ -343,12 +343,10 @@ const Preview = (() => {
       const active = total - skipped;
       const isGallery = el.classList.contains("gallery-overlay-count");
       if (skipped > 0) {
-        el.textContent = isGallery ? `${active}/${total} photos` : `${active}/${total} files`;
+        el.textContent = isGallery ? `${active}/${total}` : `${active}/${total} files`;
         el.style.color = "var(--amber, #FF8C00)";
       } else {
-        el.textContent = isGallery
-          ? `${total} ${total === 1 ? "photo" : "photos"}`
-          : `${total} ${total === 1 ? "file" : "files"}`;
+        el.textContent = isGallery ? String(total) : `${total} ${total === 1 ? "file" : "files"}`;
         el.style.color = "";
       }
     }
