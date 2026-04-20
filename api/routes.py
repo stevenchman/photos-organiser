@@ -32,8 +32,9 @@ from core.watcher import start_watcher, stop_watcher, watcher_status
 bp = Blueprint("api", __name__, url_prefix="/api")
 
 # ── In-memory store (single-user local tool) ─────────────────────────────────
-_scans: dict[str, dict] = {}       # scan_id → {status, groups, undated, ...}
-_executions: dict[str, dict] = {}  # exec_id → {progress}
+_scans: dict[str, dict] = {}           # scan_id → {status, groups, undated, ...}
+_executions: dict[str, dict] = {}      # exec_id → {progress}
+_confirmed_plans: dict[str, dict] = {} # scan_id → confirmed plan (avoids 4KB cookie limit)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -198,6 +199,7 @@ def start_scan():
             pass
 
     scan_id = str(uuid.uuid4())
+    session["current_scan_id"] = scan_id
     _scans[scan_id] = {
         "status": "scanning",
         "files_found": 0,
@@ -485,11 +487,11 @@ def post_confirm():
     conflicts = preflight_check(file_moves)
     conflict_list = [{"source": str(s), "dest_dir": str(d)} for s, d in conflicts]
 
-    # Store confirmed plan in session
-    session["confirmed_plan"] = {
+    # Store confirmed plan in memory (not session — cookie has 4KB limit)
+    _confirmed_plans[scan_id] = {
         "scan_id": scan_id,
         "operation": operation,
-        "file_moves": [(str(s), str(d)) for s, d in file_moves],
+        "file_moves": [(str(src), str(dst)) for src, dst in file_moves],
     }
 
     return jsonify({
@@ -503,7 +505,9 @@ def post_confirm():
 
 @bp.post("/execute")
 def post_execute():
-    plan = session.get("confirmed_plan")
+    # Look up plan by scan_id stored in session (the plan itself is in-memory)
+    scan_id = session.get("current_scan_id")
+    plan = _confirmed_plans.get(scan_id) if scan_id else None
     if not plan:
         return jsonify({"error": "No confirmed plan. Call /api/confirm first."}), 400
 
